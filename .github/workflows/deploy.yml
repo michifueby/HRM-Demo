@@ -31,7 +31,7 @@ jobs:
           echo "=== Files in src/ ==="
           ls -la src/src/
           echo "=== First lines of package-lock.json ==="
-          head -20 src/package-lock.json
+          head -20 src/src/package-lock.json
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -40,7 +40,7 @@ jobs:
 
       - name: Install dependencies (forced absolute path)
         run: |
-          cd src
+          cd src/src
           npm ci
           echo "npm ci succeeded"
 
