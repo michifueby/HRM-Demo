@@ -40,17 +40,19 @@ jobs:
       - name: Install dependencies + Build
         run: |
           cd src/src
-          npm ci --legacy-peer-deps --foreground-scripts
-         
-          export ESBUILD_BINARY_PATH=$(npx esbuild --version 2>/dev/null || echo "")
-          export SWC_BINARY_PATH=$(npx @swc/core --version 2>/dev/null || echo "")
+          npm ci --legacy-peer-deps --no-optional --omit=optional --prefer-offline
+          
+          echo "SWC_DISABLE_BINARY_DOWNLOAD=true"  >> $GITHUB_ENV
+          echo "ESBUILD_DISABLE_BINARY_DOWNLOAD=true" >> $GITHUB_ENV
+          
+          npm install @swc/wasm @esbuild/wasm --no-save
           
           ./node_modules/.bin/nx run-many \
             --target=build \
             --projects=${{ matrix.service }}-frontend,${{ matrix.service }}-backend \
             --configuration=production \
             --parallel=6
-
+            
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
