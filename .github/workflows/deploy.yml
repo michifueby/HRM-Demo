@@ -29,9 +29,9 @@ jobs:
           echo "=== Current directory ==="
           pwd
           echo "=== Files in src/ ==="
-          ls -la HRM-Demo/src/
+          ls -la src/src/
           echo "=== First lines of package-lock.json ==="
-          head -20 HRM-Demo/src/package-lock.json
+          head -20 src/package-lock.json
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
