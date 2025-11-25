@@ -53,31 +53,36 @@ jobs:
 
           npm ci --legacy-peer-deps --omit=optional --no-audit --no-fund
 
-          # Environment variables to prevent common CI hangups
+          # 2. CRITICAL: Restrict Threading and Memory
+          # Force Node's internal threadpool to 1 to prevent CPU starvation on 2-core runners
+          export UV_THREADPOOL_SIZE=1
+          # Reduce max memory to 3GB to leave room for the OS (prevents freezing)
+          export NODE_OPTIONS="--max-old-space-size=3072"
+          
+          # 3. Standard Nx environment variables
           export NX_DAEMON=false
           export NX_INTERACTIVE=false
-          export NX_PLUGIN_NO_TIMEOUTS=true  # Bypasses graph timeouts
-          export NODE_OPTIONS="--max-old-space-size=4096" # Prevents OOM
+          export NX_PLUGIN_NO_TIMEOUTS=true
+          export CI=true
 
-          # Force a clean Nx state before build (more reliable than pkill)
-          rm -rf /tmp/nx-daemon || true
-          ./node_modules/.bin/nx reset --force
-
-          # Build Frontend for the current matrix service
+          # 4. Run Builds Sequentially without Verbose logging
+          # We remove --verbose to prevent I/O buffer hangs
+          
+          echo "Build ${{ matrix.service }}-frontend..."
           ./node_modules/.bin/nx build ${{ matrix.service }}-frontend \
             --configuration=production \
+            --parallel=1 \
+            --max-workers=1 \
             --skip-nx-cache \
-            --no-daemon \
-            --no-cloud \
-            --verbose
+            --no-daemon
 
-          # Build Backend for the current matrix service
+          echo "Build ${{ matrix.service }}-backend..."
           ./node_modules/.bin/nx build ${{ matrix.service }}-backend \
             --configuration=production \
+            --parallel=1 \
+            --max-workers=1 \
             --skip-nx-cache \
-            --no-daemon \
-            --no-cloud \
-            --verbose
+            --no-daemon
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
