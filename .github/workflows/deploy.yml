@@ -40,12 +40,17 @@ jobs:
       - name: Install dependencies + Build
         run: |
           cd src/src
-          npm ci --legacy-peer-deps --omit=optional --prefer-offline --no-audit --no-fund
+          npm ci --legacy-peer-deps \
+                  --omit=optional \
+                  --prefer-offline \
+                  --no-audit \
+                  --no-fund \
+                  --loglevel=error
 
           export SWC_WASM=1
           export ESBUILD_WASM=1
 
-          npm install @swc/wasm @esbuild/wasm --no-save --prefer-offline || true
+          ./node_modules/.bin/nx reset     
 
           ./node_modules/.bin/nx run-many \
             --target=build \
