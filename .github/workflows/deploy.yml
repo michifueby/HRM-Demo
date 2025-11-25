@@ -22,16 +22,16 @@ jobs:
       - name: Checkout code into src/
         uses: actions/checkout@v4
         with:
-          path: src
+          path: src/src
 
       - name: Debug – prove we have the file
         run: |
           echo "=== Current directory ==="
           pwd
-          echo "=== Files in src/ ==="
-          ls -la src/
+          echo "=== Files in src/src/ ==="
+          ls -la src/src/
           echo "=== First lines of package-lock.json ==="
-          head -20 src/package-lock.json
+          head -20 src/src/package-lock.json
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -40,13 +40,13 @@ jobs:
 
       - name: Install dependencies (forced absolute path)
         run: |
-          cd src
+          cd src/src
           npm ci
           echo "npm ci succeeded"
 
       - name: Build with Nx
         run: |
-          cd src
+          cd src/src
           npx nx run-many --target=build \
             --projects=${{ matrix.service }}-frontend,${{ matrix.service }}-backend \
             --configuration=production --parallel=3
@@ -59,7 +59,7 @@ jobs:
 
       - name: Deploy Frontend
         run: |
-          cd src
+          cd src/src
           aws s3 sync dist/apps/${{ matrix.service }}/frontend \
             s3://hrm-${{ matrix.service }}-frontend/ --delete --cache-control "public, max-age=60"
           aws cloudfront create-invalidation \
@@ -68,7 +68,7 @@ jobs:
 
       - name: Deploy Backend
         run: |
-          cd src
+          cd  src/src
           cd dist/apps/${{ matrix.service }}/backend
           zip -r ../../${{ matrix.service }}-backend.zip . > /dev/null
           VERSION="gha-${{ github.run_id }}-${{ github.run_attempt }}"
