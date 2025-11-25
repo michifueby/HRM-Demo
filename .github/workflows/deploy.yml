@@ -44,7 +44,7 @@ jobs:
           echo "npm ci succeeded"
 
       - name: Build with Nx
-        run: npm exec nx run-many --target=build \
+        run: cd src/src && npm exec nx run-many --target=build \
           --projects=activities-frontend,activities-backend \
           --configuration=production --parallel=3
 
