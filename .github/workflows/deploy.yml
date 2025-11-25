@@ -45,8 +45,8 @@ jobs:
 
       - name: Build with Nx
         run: |
-          cd src
-          npx nx run-many --target=build \
+          cd src/src
+          cd src/src && npx nx run-many --target=build \
             --projects=activities-frontend,activities-backend \
             --configuration=production \
             --parallel=3
