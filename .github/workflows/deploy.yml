@@ -40,7 +40,7 @@ jobs:
       - name: Install dependencies (forced absolute path)
         run: |
           cd src/src
-          npm ci
+          npm ci --legacy-peer-deps
           echo "npm ci succeeded"
 
       - name: Build with Nx
