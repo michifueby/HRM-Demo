@@ -42,7 +42,6 @@ jobs:
           cd src/src
           cd src/src && npm ci --legacy-peer-deps --foreground-scripts --silent
           echo "npm ci succeeded"
-                  - run: cd src && npm run build
 
       - name: Build with Nx
         run: |
