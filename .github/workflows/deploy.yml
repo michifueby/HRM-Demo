@@ -37,39 +37,38 @@ jobs:
         with:
           node-version: 20
 
-      - name: Cache Nx 
-        uses: actions/cache@v4
-        with:
-          path: |
-            src/src/node_modules
-            /tmp/nx-*
-            ~/.nx-cache
-          key: ${{ runner.os }}-nx22-${{ hashFiles('src/src/package-lock.json') }}
-          restore-keys: ${{ runner.os }}-nx22-
+      # 1. NEW STEP: Create Swap Space to prevent "Silent Killing" of the build
+      - name: Add Swap Space
+        run: |
+          sudo fallocate -l 4G /swapfile
+          sudo chmod 600 /swapfile
+          sudo mkswap /swapfile
+          sudo swapon /swapfile
+          echo "Swap created. Checking memory:"
+          free -h
 
       - name: Install dependencies + Build
         run: |
           cd src/src
 
+          # 2. CONFIGURATION: Disable Animations & Set Limits
           export CI=true
           export NX_DAEMON=false
-          export NX_INTERACTIVE=false
-          export NX_PLUGIN_NO_TIMEOUTS=true
+          # This disables the dynamic spinner that freezes CI logs
+          export NX_TASKS_RUNNER_DYNAMIC_OUTPUT=false 
           export UV_THREADPOOL_SIZE=1
-          export NODE_OPTIONS="--max-old-space-size=3072"
+          # We increase Node limit slightly because we now have Swap space
+          export NODE_OPTIONS="--max-old-space-size=4096"
 
-          # 2. Install Dependencies Safely
-          # --ignore-scripts: Prevents Nx or other libs from running post-install hooks that hang
-          # --legacy-peer-deps: Kept based on your previous config
+          # 3. INSTALL: Safe install (ignoring scripts)
           echo "Installing dependencies..."
           npm ci --legacy-peer-deps --omit=optional --no-audit --no-fund --ignore-scripts
 
-          # 3. Manually Rebuild Critical Binaries
-          # Since we ignored scripts, we must explicitly rebuild the build tools so they have binaries
+          # 4. REBUILD: Ensure binaries exist
           echo "Rebuilding build tools..."
           npm rebuild @swc/core esbuild
 
-          # 4. Run Builds Sequentially
+          # 5. BUILD: Sequential execution
           echo "Build ${{ matrix.service }}-frontend..."
           ./node_modules/.bin/nx build ${{ matrix.service }}-frontend \
             --configuration=production \
