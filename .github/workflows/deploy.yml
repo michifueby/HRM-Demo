@@ -44,9 +44,12 @@ jobs:
           echo "npm ci succeeded"
 
       - name: Build with Nx
-        run: cd src/src && npm exec nx run-many --target=build \
-          --projects=activities-frontend,activities-backend \
-          --configuration=production --parallel=3
+        run: |
+          cd src
+          npx nx run-many --target=build \
+            --projects=activities-frontend,activities-backend \
+            --configuration=production \
+            --parallel=3
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
