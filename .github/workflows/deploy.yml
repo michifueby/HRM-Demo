@@ -40,11 +40,17 @@ jobs:
       # 1. NEW STEP: Create Swap Space to prevent "Silent Killing" of the build
       - name: Add Swap Space
         run: |
-          sudo fallocate -l 4G /swapfile
-          sudo chmod 600 /swapfile
-          sudo mkswap /swapfile
-          sudo swapon /swapfile
-          echo "Swap created. Checking memory:"
+          # Check existing swap for debugging
+          sudo swapon --show
+          
+          # Create a NEW swap file (avoiding the system default /swapfile)
+          sudo fallocate -l 4G /swapfile_gha
+          sudo chmod 600 /swapfile_gha
+          sudo mkswap /swapfile_gha
+          sudo swapon /swapfile_gha
+          
+          # Verify total memory
+          echo "Swap created. Memory status:"
           free -h
 
       - name: Install dependencies + Build
