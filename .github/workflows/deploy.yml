@@ -40,12 +40,18 @@ jobs:
       - name: Install dependencies (forced absolute path)
         run: |
           cd src/src
-          cd src/src && npm ci --legacy-peer-deps --foreground-scripts --silent && npm run build
+          cd src/src && npm ci --legacy-peer-deps --foreground-scripts --silent
           echo "npm ci succeeded"
+                  - run: cd src && npm run build
 
       - name: Build with Nx
         run: |
-          run: cd src && ./node_modules/.bin/nx run-many --target=build --projects=activities-frontend,activities-backend --configuration=production --parallel=3
+          cd src/src
+          ./node_modules/.bin/nx run-many \
+            --target=build \
+            --projects=${{ matrix.service }}-frontend,${{ matrix.service }}-backend \
+            --configuration=production \
+            --parallel=6
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
