@@ -1,0 +1,29 @@
+# docker-compose.yml
+version: "3.9"
+services:
+  hr-core:
+    build:
+      context: .
+      dockerfile: apps/hr-core/backend/Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+
+  hr-metrics:
+    build:
+      context: .
+      dockerfile: apps/hr-metrics/backend/Dockerfile
+    ports:
+      - "3001:3000"
+    environment:
+      - PORT=3000
+
+  hr-activities:
+    build:
+      context: .
+      dockerfile: apps/hr-activities/backend/Dockerfile
+    ports:
+      - "3002:3000"
+    environment:
+      - PORT=3000

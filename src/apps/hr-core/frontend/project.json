@@ -1,31 +1,26 @@
 {
   "name": "hr-core-frontend",
-  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
   "projectType": "application",
   "prefix": "app",
-  "sourceRoot": "hr-core/frontend/src",
+  "sourceRoot": "apps/hr-core/frontend/src",
   "tags": [],
   "targets": {
     "build": {
       "executor": "@angular/build:application",
       "outputs": ["{options.outputPath}"],
       "options": {
-        "outputPath": "dist/hr-core/frontend",
-        "browser": "hr-core/frontend/src/main.ts",
+        "outputPath": "dist/apps/hr-core/frontend",
+        "browser": "apps/hr-core/frontend/src/main.ts",
         "polyfills": ["zone.js"],
-        "tsConfig": "hr-core/frontend/tsconfig.app.json",
+        "tsConfig": "apps/hr-core/frontend/tsconfig.app.json",
         "assets": [
           {
             "glob": "**/*",
-            "input": "hr-core/frontend/public"
+            "input": "apps/hr-core/frontend/public"
           }
         ],
-        "styles": ["hr-core/frontend/src/styles.css"],
-        "server": "hr-core/frontend/src/main.server.ts",
-        "ssr": {
-          "entry": "hr-core/frontend/src/server.ts"
-        },
-        "outputMode": "server"
+        "styles": ["apps/hr-core/frontend/src/styles.css"]
       },
       "configurations": {
         "production": {
@@ -77,8 +72,8 @@
       "executor": "@nx/jest:jest",
       "outputs": ["{workspaceRoot}/coverage/{projectRoot}"],
       "options": {
-        "jestConfig": "hr-core/frontend/jest.config.ts",
-        "tsConfig": "hr-core/frontend/tsconfig.spec.json"
+        "jestConfig": "apps/hr-core/frontend/jest.config.ts",
+        "tsConfig": "apps/hr-core/frontend/tsconfig.spec.json"
       }
     },
     "serve-static": {
@@ -86,7 +81,7 @@
       "executor": "@nx/web:file-server",
       "options": {
         "buildTarget": "frontend:build",
-        "staticFilePath": "dist/hr-core/frontend/browser",
+        "staticFilePath": "dist/apps/hr-core/frontend/browser",
         "spa": true
       }
     }

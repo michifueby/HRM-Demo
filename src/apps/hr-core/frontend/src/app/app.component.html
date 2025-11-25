@@ -1,0 +1,27 @@
+<div class="container">
+  <h1>Welcome to HRM – {{ title }}</h1>
+
+  <div class="card">
+    <h3>Dynamic Content</h3>
+    <p><strong>Server Time:</strong> {{ serverTime }}</p>
+  </div>
+
+  <div class="card">
+    <h3>Static Resource</h3>
+    <img src="assets/logo-hr-core.png" alt="HR Core Logo" width="150">
+  </div>
+
+  <div class="card">
+    <h3>Navigate to Other Modules</h3>
+    <p>
+      <a [href]="links.metrics" target="_blank" class="btn">Go to HR Metrics</a>
+    </p>
+    <p>
+      <a [href]="links.activities" target="_blank" class="btn">Go to HR Activities</a>
+    </p>
+  </div>
+
+  <footer>
+    Running on: {{ currentUrl }}
+  </footer>
+</div>

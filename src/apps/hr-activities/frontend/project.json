@@ -1,31 +1,26 @@
 {
   "name": "hr-activities-frontend",
-  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
   "projectType": "application",
   "prefix": "app",
-  "sourceRoot": "hr-activities/frontend/src",
+  "sourceRoot": "apps/hr-activities/frontend/src",
   "tags": [],
   "targets": {
     "build": {
       "executor": "@angular/build:application",
       "outputs": ["{options.outputPath}"],
       "options": {
-        "outputPath": "dist/hr-activities/frontend",
-        "browser": "hr-activities/frontend/src/main.ts",
+        "outputPath": "dist/apps/hr-activities/frontend",
+        "browser": "apps/hr-activities/frontend/src/main.ts",
         "polyfills": ["zone.js"],
-        "tsConfig": "hr-activities/frontend/tsconfig.app.json",
+        "tsConfig": "apps/hr-activities/frontend/tsconfig.app.json",
         "assets": [
           {
             "glob": "**/*",
-            "input": "hr-activities/frontend/public"
+            "input": "apps/hr-activities/frontend/public"
           }
         ],
-        "styles": ["hr-activities/frontend/src/styles.css"],
-        "server": "hr-activities/frontend/src/main.server.ts",
-        "ssr": {
-          "entry": "hr-activities/frontend/src/server.ts"
-        },
-        "outputMode": "server"
+        "styles": ["apps/hr-activities/frontend/src/styles.css"]
       },
       "configurations": {
         "production": {
@@ -77,8 +72,8 @@
       "executor": "@nx/jest:jest",
       "outputs": ["{workspaceRoot}/coverage/{projectRoot}"],
       "options": {
-        "jestConfig": "hr-activities/frontend/jest.config.ts",
-        "tsConfig": "hr-activities/frontend/tsconfig.spec.json"
+        "jestConfig": "apps/hr-activities/frontend/jest.config.ts",
+        "tsConfig": "apps/hr-activities/frontend/tsconfig.spec.json"
       }
     },
     "serve-static": {
@@ -86,7 +81,7 @@
       "executor": "@nx/web:file-server",
       "options": {
         "buildTarget": "frontend:build",
-        "staticFilePath": "dist/hr-activities/frontend/browser",
+        "staticFilePath": "dist/apps/hr-activities/frontend/browser",
         "spa": true
       }
     }

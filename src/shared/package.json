@@ -1,0 +1,12 @@
+{
+  "name": "@hrm/shared/time-service",
+  "version": "0.0.1",
+  "peerDependencies": {
+    "@angular/common": "^20.3.0",
+    "@angular/core": "^20.3.0"
+  },
+  "sideEffects": false,
+  "devDependencies": {
+    "ng-packagr": "^21.0.0"
+  }
+}
