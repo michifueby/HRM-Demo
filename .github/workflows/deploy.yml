@@ -9,6 +9,10 @@ permissions:
   contents: read
   id-token: write         # required for OIDC
 
+defaults:
+  run:
+    working-directory: src
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
@@ -35,7 +39,6 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-        working-directory: src
 
       - name: Nx build frontend + backend (production)
         run: |
@@ -43,7 +46,6 @@ jobs:
             --projects=${{ matrix.service }}-frontend,${{ matrix.service }}-backend \
             --configuration=production \
             --parallel=3
-        working-directory: src
 
       # ─────────────────────────────────────
       # 2. Configure AWS credentials via OIDC (no keys!)
@@ -58,7 +60,6 @@ jobs:
       # 3. Deploy Frontend → S3 + CloudFront
       # ─────────────────────────────────────
       - name: Deploy Frontend to S3 + invalidate CloudFront
-        working-directory: src
         run: |
           aws s3 sync dist/apps/${{ matrix.service }}/frontend \
             s3://hrm-${{ matrix.service }}-frontend/ \
@@ -73,7 +74,6 @@ jobs:
       # 4. Deploy Backend → Elastic Beanstalk
       # ─────────────────────────────────────
       - name: Package & deploy Backend to Elastic Beanstalk
-        working-directory: src
         run: |
           cd dist/apps/${{ matrix.service }}/backend
           zip -r ../../${{ matrix.service }}-backend.zip . > /dev/null
