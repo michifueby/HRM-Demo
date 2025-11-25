@@ -34,7 +34,8 @@ jobs:
           node-version: 20
 
       - name: Install dependencies
-        run: npm ci                 
+        run: npm ci  
+        working-directory: src               
 
       - name: Nx build (production)
         run: npx nx run-many --target=build --projects=${{ matrix.service }}-frontend,${{ matrix.service }}-backend --configuration=production --parallel=3
