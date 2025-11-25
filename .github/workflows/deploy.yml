@@ -31,10 +31,10 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20        
+          node-version: 20
 
       - name: Install dependencies
-        run: npm ci            
+        run: npm ci                 
 
       - name: Nx build (production)
         run: npx nx run-many --target=build --projects=${{ matrix.service }}-frontend,${{ matrix.service }}-backend --configuration=production --parallel=3
