@@ -51,23 +51,25 @@ jobs:
         run: |
           cd src/src
 
-          npm ci --legacy-peer-deps --omit=optional --no-audit --no-fund
-
-          # 2. CRITICAL: Restrict Threading and Memory
-          # Force Node's internal threadpool to 1 to prevent CPU starvation on 2-core runners
-          export UV_THREADPOOL_SIZE=1
-          # Reduce max memory to 3GB to leave room for the OS (prevents freezing)
-          export NODE_OPTIONS="--max-old-space-size=3072"
-          
-          # 3. Standard Nx environment variables
+          export CI=true
           export NX_DAEMON=false
           export NX_INTERACTIVE=false
           export NX_PLUGIN_NO_TIMEOUTS=true
-          export CI=true
+          export UV_THREADPOOL_SIZE=1
+          export NODE_OPTIONS="--max-old-space-size=3072"
 
-          # 4. Run Builds Sequentially without Verbose logging
-          # We remove --verbose to prevent I/O buffer hangs
-          
+          # 2. Install Dependencies Safely
+          # --ignore-scripts: Prevents Nx or other libs from running post-install hooks that hang
+          # --legacy-peer-deps: Kept based on your previous config
+          echo "Installing dependencies..."
+          npm ci --legacy-peer-deps --omit=optional --no-audit --no-fund --ignore-scripts
+
+          # 3. Manually Rebuild Critical Binaries
+          # Since we ignored scripts, we must explicitly rebuild the build tools so they have binaries
+          echo "Rebuilding build tools..."
+          npm rebuild @swc/core esbuild
+
+          # 4. Run Builds Sequentially
           echo "Build ${{ matrix.service }}-frontend..."
           ./node_modules/.bin/nx build ${{ matrix.service }}-frontend \
             --configuration=production \
@@ -83,7 +85,7 @@ jobs:
             --max-workers=1 \
             --skip-nx-cache \
             --no-daemon
-
+            
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
