@@ -52,27 +52,23 @@ jobs:
           cd src/src
 
           npm ci --legacy-peer-deps --omit=optional --no-audit --no-fund
-          npm ls nx  # Debug: confirms single version (should show only 22.1.1)
 
-          npm uninstall @swc/core esbuild --silent
-          npm install @swc/core@^1.7.0 esbuild@^0.27.0 --no-optional --no-save
-
+          # Environment variables to prevent common CI hangups
           export NX_DAEMON=false
           export NX_INTERACTIVE=false
           export NX_PLUGIN_NO_TIMEOUTS=true  # Bypasses graph timeouts
-          export NX_SKIP_NX_CACHE=true
-          export NODE_OPTIONS="--max-old-space-size=4096 --no-experimental-fetch"  # Prevents OOM/thread explosion
+          export NODE_OPTIONS="--max-old-space-size=4096" # Prevents OOM
 
-          pkill -f nx || true
-          pkill -f swc || true
+          # Force a clean Nx state before build (more reliable than pkill)
           rm -rf /tmp/nx-daemon || true
-          ./node_modules/.bin/nx reset --force || true
+          ./node_modules/.bin/nx reset --force
 
+          # The build command remains the same
           ./node_modules/.bin/nx run-many \
             --target=build \
             --projects=${{ matrix.service }}-frontend,${{ matrix.service }}-backend \
             --configuration=production \
-            --parallel=1 \  # Key: serial avoids CI hang
+            --parallel=1 \
             --skip-nx-cache \
             --no-daemon \
             --no-cloud \
