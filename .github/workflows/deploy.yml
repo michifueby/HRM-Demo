@@ -9,52 +9,73 @@ permissions:
   contents: read
   id-token: write
 
-defaults:
-  run:
-    working-directory: src
-
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
 
     strategy:
       matrix:
         service: [ core, metrics, activities ]
 
     steps:
+      # 1. Checkout into src/
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           path: src
 
+      # 2. Node setup (no cache = no false failures)
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
+      # 3. FORCE everything to run inside src/
       - name: Install dependencies
-        run: npm ci  
-        working-directory: src               
+        run: |
+          cd src
+          npm ci
 
-      - name: Nx build (production)
-        run: npx nx run-many --target=build --projects=${{ matrix.service }}-frontend,${{ matrix.service }}-backend --configuration=production --parallel=3
+      - name: Build Nx projects
+        run: |
+          cd src
+          npx nx run-many --target=build \
+            --projects=${{ matrix.service }}-frontend,${{ matrix.service }}-backend \
+            --configuration=production --parallel=3
 
-      - name: Configure AWS credentials
+      - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.ACTIONS_GITHUB_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Deploy Frontend → S3 + CloudFront
+      - name: Deploy Frontend → S3 + CloudFront invalidation
         run: |
-          aws s3 sync dist/apps/${{ matrix.service }}/frontend s3://hrm-${{ matrix.service }}-frontend/ --delete --cache-control "public, max-age=60"
-          aws cloudfront create-invalidation --distribution-id ${{ secrets[format('CF_DISTRIBUTION_{0}', matrix.service)] }} --paths "/*"
+          cd src
+          aws s3 sync dist/apps/${{ matrix.service }}/frontend \
+            s3://hrm-${{ matrix.service }}-frontend/ \
+            --delete \
+            --cache-control "public, max-age=60"
+
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ secrets[format('CF_DISTRIBUTION_{0}', matrix.service)] }} \
+            --paths "/*"
 
       - name: Deploy Backend → Elastic Beanstalk
         run: |
+          cd src
           cd dist/apps/${{ matrix.service }}/backend
           zip -r ../../${{ matrix.service }}-backend.zip . > /dev/null
-          VERSION="gha-${{ github.run_id }}"
-          aws elasticbeanstalk create-application-version --application-name hrm-paas --version-label "$VERSION" --source-bundle S3Bucket=hrm-deployments,S3Key="${{ matrix.service }}-backend.zip" --auto-create-application false
-          aws elasticbeanstalk update-environment --application-name hrm-paas --environment-name hrm-${{ matrix.service }}-backend-env --version-label "$VERSION"
+
+          VERSION="gha-${{ github.run_id }}-${{ github.run_attempt }}"
+          aws elasticbeanstalk create-application-version \
+            --application-name hrm-paas \
+            --version-label "$VERSION" \
+            --source-bundle S3Bucket=hrm-deployments,S3Key="${{ matrix.service }}-backend.zip" \
+            --auto-create-application false
+
+          aws elasticbeanstalk update-environment \
+            --application-name hrm-paas \
+            --environment-name hrm-${{ matrix.service }}-backend-env \
+            --version-label "$VERSION"
