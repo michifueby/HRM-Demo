@@ -34,6 +34,28 @@ Based on the HRM context (load-balanced installation servers, modular components
 | **Backend**  | Elastic Beanstalk (Node.js)    | Full Node.js PaaS with auto-scaling, health checks, rolling deploys, CloudWatch logs/metrics out of the box.       | 3–5× cheaper than ECS/Fargate, zero ops, perfect for Nx    |
 | **CI/CD**    | GitHub Actions + OIDC          | Native integration, free minutes, matrix jobs deploy all 6 artifacts in parallel.                                    | No extra cost, secure (no stored AWS keys)                  |
 
+```mermaid
+flowchart TB
+    Users[Internet Users] -->|HTTPS| CF[CloudFront CDN]
+    
+    subgraph Frontend["Static Hosting"]
+        CF --> S3[S3 Bucket Angular apps]
+    end
+    
+    subgraph Backend["Node.js API"]
+        CF --> EB[Elastic Beanstalk Auto-scaling]
+    end
+    
+    subgraph CICD["CI/CD"]
+        GA[GitHub Actions\n+ OIDC] -->|deploy| S3
+        GA -->|deploy| EB
+    end
+
+    style Frontend fill:#e6f7f,stroke:#1890ff
+    style Backend fill:#f6,stroke:#52c41a
+    style CICD fill:#00,stroke:#d46b08
+```
+
 ### Live URLs (example)
 - Core:       
 - Metrics:    
