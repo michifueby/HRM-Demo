@@ -37,6 +37,16 @@ jobs:
         with:
           node-version: 20
 
+      - name: Cache Nx 
+        uses: actions/cache@v4
+        with:
+          path: |
+            src/src/node_modules
+            /tmp/nx-*
+            ~/.nx-cache
+          key: ${{ runner.os }}-nx22-${{ hashFiles('src/src/package-lock.json') }}
+          restore-keys: ${{ runner.os }}-nx22-
+
       - name: Install dependencies + Build
         run: |
           cd src/src
