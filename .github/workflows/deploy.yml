@@ -63,12 +63,17 @@ jobs:
           rm -rf /tmp/nx-daemon || true
           ./node_modules/.bin/nx reset --force
 
-          # The build command remains the same
-          ./node_modules/.bin/nx run-many \
-            --target=build \
-            --projects=${{ matrix.service }}-frontend,${{ matrix.service }}-backend \
+          # Build Frontend for the current matrix service
+          ./node_modules/.bin/nx build ${{ matrix.service }}-frontend \
             --configuration=production \
-            --parallel=1 \
+            --skip-nx-cache \
+            --no-daemon \
+            --no-cloud \
+            --verbose
+
+          # Build Backend for the current matrix service
+          ./node_modules/.bin/nx build ${{ matrix.service }}-backend \
+            --configuration=production \
             --skip-nx-cache \
             --no-daemon \
             --no-cloud \
