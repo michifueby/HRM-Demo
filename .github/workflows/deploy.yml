@@ -65,6 +65,11 @@ jobs:
           export NX_PLUGIN_NO_TIMEOUTS=true
           export CI=true
 
+					echo "=== Debug Versions ==="
+					./node_modules/.bin/nx --version
+					npm list @swc/core || true
+					npm list esbuild || true
+
           # 4. Run Builds Sequentially without Verbose logging
           # We remove --verbose to prevent I/O buffer hangs
           
