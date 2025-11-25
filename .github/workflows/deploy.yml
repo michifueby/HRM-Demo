@@ -45,7 +45,7 @@ jobs:
 
       - name: Build with Nx
         run: |
-          cd src
+          cd src/src/
           npx nx run-many --target=build \
             --projects=${{ matrix.service }}-frontend,${{ matrix.service }}-backend \
             --configuration=production --parallel=3
