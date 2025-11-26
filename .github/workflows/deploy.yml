@@ -1,4 +1,3 @@
-# .github/workflows/deploy.yml
 name: Deploy HRM PaaS to AWS
 
 on:
@@ -11,126 +10,143 @@ permissions:
   id-token: write
 
 jobs:
-  build-and-deploy:
+  # ====================================================
+  # PHASE 1: BUILD (6 Parallel Jobs)
+  # Each job gets 7GB RAM just for ONE build target
+  # ====================================================
+  build:
+    name: Build ${{ matrix.service }}-${{ matrix.type }}
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
+      fail-fast: false # If 'core' fails, 'metrics' keeps going
       matrix:
         service: [ core, metrics, activities ]
+        type: [ frontend, backend ] # This creates 3 x 2 = 6 jobs
 
     steps:
-      - name: Checkout code into src/
+      - name: Checkout code
         uses: actions/checkout@v4
         with:
           path: src
-
-      - name: Debug – prove we have the file
-        run: |
-          echo "=== Current directory ==="
-          pwd
-          echo "=== Files in src/ ==="
-          ls -la src/src/
-          echo "=== First lines of package-lock.json ==="
-          head -20 src/src/package-lock.json
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      # 1. KEEP THIS STEP (Critical for memory safety)
+      # 1. SAFETY NET: Keep Swap Space (Prevents OOM crashes)
       - name: Add Swap Space
         run: |
-          # Check existing swap for debugging
-          sudo swapon --show
-          
-          # Create a NEW swap file (avoiding the system default /swapfile)
           sudo fallocate -l 4G /swapfile_gha
           sudo chmod 600 /swapfile_gha
           sudo mkswap /swapfile_gha
           sudo swapon /swapfile_gha
-          
-          # Verify total memory
-          echo "Swap created. Memory status:"
-          free -h
 
-      # 2. UPDATED BUILD STEP (Native Binaries + Timeout)
-      - name: Install dependencies + Build
+      # 2. INSTALL & BUILD SINGLE TARGET
+      - name: Install & Build
         run: |
           cd src/src
 
-          # 1. ENVIRONMENT: Maximum Memory & Zero Noise
+          # ENVIRONMENT VARIABLES
           export CI=true
           export NX_DAEMON=false
-          export NX_Interactive=false
-          # Disable colors and dynamic output to prevent buffer freezing
           export NX_TASKS_RUNNER_DYNAMIC_OUTPUT=false 
-          export FORCE_COLOR=0
-          # Disable Source Maps (Critical for speed)
           export GENERATE_SOURCEMAP=false 
-          
-          # CRITICAL: Re-enable Single Threading (It is safer)
-          export UV_THREADPOOL_SIZE=1
-          
-          # CRITICAL: Allow Node to use 6GB of RAM (leaving 1GB + 4GB Swap for OS)
+          export UV_THREADPOOL_SIZE=1 
+          # Allow full RAM usage (Swap protects us)
           export NODE_OPTIONS="--max-old-space-size=6144"
 
-          # 2. INSTALL
+          # INSTALL
           echo "Installing dependencies..."
           npm ci --legacy-peer-deps --omit=optional --no-audit --no-fund --ignore-scripts
-
-          # 3. BINARIES
+          
+          # FIX BINARIES (Prevents the binary deadlock)
           echo "Aligning binaries..."
           npm install @swc/core@latest @swc/core-linux-x64-gnu@latest --no-save --no-optional --ignore-scripts
           npm install esbuild@latest @esbuild/linux-x64@latest --no-save --no-optional --ignore-scripts
 
-          # 4. SILENT BUILD (No Verbose)
-          # We removed --verbose. We rely on the exit code.
-          # We increased timeout to 25m because single-thread is slow but stable.
+          # BUILD
+          # We build ONLY the specific matrix target (e.g., core-frontend)
+          echo "Building ${{ matrix.service }}-${{ matrix.type }}..."
           
-          echo "Build core-frontend..."
-          timeout 25m ./node_modules/.bin/nx build core-frontend \
+          ./node_modules/.bin/nx build ${{ matrix.service }}-${{ matrix.type }} \
             --configuration=production \
             --parallel=1 \
             --max-workers=1 \
             --skip-nx-cache \
             --no-daemon \
-            --sourceMap=false
+            --sourceMap=false \
+            --verbose
 
-          echo "Build core-backend..."
-          timeout 25m ./node_modules/.bin/nx build core-backend \
-            --configuration=production \
-            --parallel=1 \
-            --max-workers=1 \
-            --skip-nx-cache \
-            --no-daemon \
-            --sourceMap=false
-            
+      # 3. ARTIFACT UPLOAD
+      # We save the build output to pass it to the Deploy job
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ matrix.service }}-${{ matrix.type }}
+          # Note: Adjust this path if your nx output dir is different
+          path: src/dist/apps/${{ matrix.service }}/${{ matrix.type }}
+          retention-days: 1
+
+  # ====================================================
+  # PHASE 2: DEPLOY
+  # Runs only after the specific service builds succeed
+  # ====================================================
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      matrix:
+        service: [ core, metrics, activities ]
+    
+    steps:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.ACTIONS_GITHUB_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
 
+      # RESTORE FRONTEND
+      - name: Download Frontend Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: build-${{ matrix.service }}-frontend
+          path: dist_frontend
+
+      # RESTORE BACKEND
+      - name: Download Backend Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: build-${{ matrix.service }}-backend
+          path: dist_backend
+
       - name: Deploy Frontend
         run: |
-          cd src
-          aws s3 sync dist/apps/${{ matrix.service }}/frontend \
+          # Use the downloaded artifact path
+          aws s3 sync dist_frontend \
             s3://hrm-${{ matrix.service }}-frontend/ --delete --cache-control "public, max-age=60"
+          
+          # Invalidate CloudFront
           aws cloudfront create-invalidation \
             --distribution-id ${{ secrets[format('CF_DISTRIBUTION_{0}', matrix.service)] }} \
             --paths "/*"
 
       - name: Deploy Backend
         run: |
-          cd src
-          cd dist/apps/${{ matrix.service }}/backend
-          zip -r ../../${{ matrix.service }}-backend.zip . > /dev/null
+          cd dist_backend
+          # Create zip from the downloaded artifact
+          zip -r ../backend.zip . > /dev/null
+          
           VERSION="gha-${{ github.run_id }}-${{ github.run_attempt }}"
+          
           aws elasticbeanstalk create-application-version \
             --application-name hrm-paas \
             --version-label "$VERSION" \
             --source-bundle S3Bucket=hrm-deployments,S3Key="${{ matrix.service }}-backend.zip" \
-            --auto-create-application false
+            --auto-create-application false || true
+            
           aws elasticbeanstalk update-environment \
             --application-name hrm-paas \
             --environment-name hrm-${{ matrix.service }}-backend-env \
