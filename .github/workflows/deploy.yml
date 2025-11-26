@@ -43,7 +43,7 @@ jobs:
           sudo mkswap /swapfile_gha
           sudo swapon /swapfile_gha
 
-      # 2. INSTALL & BUILD SINGLE TARGET
+     # 2. INSTALL & BUILD SINGLE TARGET
       - name: Install & Build
         run: |
           cd src/src
@@ -54,31 +54,30 @@ jobs:
           export NX_TASKS_RUNNER_DYNAMIC_OUTPUT=false 
           export GENERATE_SOURCEMAP=false 
           export UV_THREADPOOL_SIZE=1 
-          # Allow full RAM usage (Swap protects us)
-          export NODE_OPTIONS="--max-old-space-size=6144"
+          # TUNED: Limit Node to 4GB. This forces it to Garbage Collect 
+          # instead of freezing the OS.
+          export NODE_OPTIONS="--max-old-space-size=4096"
 
           # INSTALL
           echo "Installing dependencies..."
           npm ci --legacy-peer-deps --omit=optional --no-audit --no-fund --ignore-scripts
           
-          # FIX BINARIES (Prevents the binary deadlock)
+          # FIX BINARIES
           echo "Aligning binaries..."
           npm install @swc/core@latest @swc/core-linux-x64-gnu@latest --no-save --no-optional --ignore-scripts
           npm install esbuild@latest @esbuild/linux-x64@latest --no-save --no-optional --ignore-scripts
 
           # BUILD
-          # We build ONLY the specific matrix target (e.g., core-frontend)
           echo "Building ${{ matrix.service }}-${{ matrix.type }}..."
           
+          # We removed --verbose to prevent "Silent Freezing"
           ./node_modules/.bin/nx build ${{ matrix.service }}-${{ matrix.type }} \
             --configuration=production \
             --parallel=1 \
             --max-workers=1 \
             --skip-nx-cache \
             --no-daemon \
-            --sourceMap=false \
-            --verbose
-
+            --sourceMap=false
       # 3. ARTIFACT UPLOAD
       # We save the build output to pass it to the Deploy job
       - name: Upload Artifact
