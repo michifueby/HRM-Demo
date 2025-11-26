@@ -56,22 +56,22 @@ jobs:
             sleep 30
           done) &
 
-      # 3. INSTALL & BUILD
+# 3. INSTALL & BUILD
       - name: Install & Build
         run: |
           cd src/src
 
           # ---------------------------------------------------------
-          # CONFIGURATION (The Deadlock Fix)
+          # CONFIGURATION
           # ---------------------------------------------------------
           export CI=true
           export NX_DAEMON=false
           export NX_TASKS_RUNNER_DYNAMIC_OUTPUT=false 
           export GENERATE_SOURCEMAP=false 
           export FORCE_COLOR=0
-          # 1. Memory Limit: 4GB (Forces GC before Swap)
+          # Memory: 4GB
           export NODE_OPTIONS="--max-old-space-size=4096"
-          # 2. CRITICAL: Force Single Thread I/O (Prevents OS Freeze)
+          # Threading: Single Thread (Vital for Swap usage)
           export UV_THREADPOOL_SIZE=1
 
           # ---------------------------------------------------------
@@ -81,10 +81,11 @@ jobs:
           npm uninstall @swc/core @swc/helpers --no-save
 
           # ---------------------------------------------------------
-          # STEP B: Install Compatible Versions
+          # STEP B: Install Compatible Versions (UPDATED to 1.15.3)
           # ---------------------------------------------------------
           echo "Installing fixed SWC versions..."
-          npm install @swc/core@1.10.7 @swc/helpers@0.5.15 --save-dev --save-exact --no-audit --no-fund
+          # We bump to 1.15.3 to satisfy the Nx requirement seen in your logs
+          npm install @swc/core@1.15.3 @swc/helpers@0.5.15 --save-dev --save-exact --no-audit --no-fund
 
           # ---------------------------------------------------------
           # STEP C: Install Remaining Dependencies
@@ -93,10 +94,11 @@ jobs:
           npm install --no-audit --no-fund --ignore-scripts
 
           # ---------------------------------------------------------
-          # STEP D: Ensure Linux Binaries
+          # STEP D: Ensure Linux Binaries (UPDATED to 1.15.3)
           # ---------------------------------------------------------
           echo "Fetching Linux Binaries..."
-          npm install @swc/core-linux-x64-gnu@1.10.7 --no-save --no-optional --ignore-scripts
+          # Must match the core version exactly
+          npm install @swc/core-linux-x64-gnu@1.15.3 --no-save --no-optional --ignore-scripts
           npm install @esbuild/linux-x64@latest --no-save --no-optional --ignore-scripts
 
           # ---------------------------------------------------------
