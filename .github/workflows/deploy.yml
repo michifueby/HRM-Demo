@@ -58,44 +58,44 @@ jobs:
         run: |
           cd src/src
 
+          # 1. ENVIRONMENT: Optimize for Speed/Memory
           export CI=true
           export NX_DAEMON=false
-          export NX_INTERACTIVE=false
-          export NX_TASKS_RUNNER_DYNAMIC_OUTPUT=false 
-          export UV_THREADPOOL_SIZE=1
+          # Disable Source Maps (Huge memory saver for React/Webpack/Vite)
+          export GENERATE_SOURCEMAP=false 
+          # Prevent Node from grabbing all 7GB at once (leave room for OS)
+          export NODE_OPTIONS="--max-old-space-size=4096"
 
-          # 2. INSTALL DEPENDENCIES (THE FIX)
-          # We add --ignore-scripts. This guarantees npm ci CANNOT hang.
-          # It simply unzips the files and stops.
-          echo "Installing dependencies (Scripts Disabled)..."
+          # 2. INSTALL (Fast & Safe)
+          echo "Installing dependencies..."
           npm ci --legacy-peer-deps --omit=optional --no-audit --no-fund --ignore-scripts
 
-          # 3. MANUAL BINARY FETCH
-          # Since we ignored scripts, we must manually pull the Linux binaries 
-          # for the tools we rely on (SWC and Esbuild).
-          echo "Fetching Linux Binaries..."
-          npm install @swc/core-linux-x64-gnu --no-save --no-optional --ignore-scripts
-          npm install @esbuild/linux-x64 --no-save --no-optional --ignore-scripts
+          # 3. BINARIES (Align Versions)
+          echo "Aligning binaries..."
+          npm install @swc/core@latest @swc/core-linux-x64-gnu@latest --no-save --no-optional --ignore-scripts
+          npm install esbuild@latest @esbuild/linux-x64@latest --no-save --no-optional --ignore-scripts
 
-          # 4. BUILD
-          # We keep the timeout to ensure 'Fail Fast' if the build itself hangs.
+          # 4. LIGHTWEIGHT BUILD
+          # We add --sourceMap=false to explicitly tell Nx/Webpack to save memory.
           
           echo "Build ${{ matrix.service }}-frontend..."
-          timeout 20m ./node_modules/.bin/nx build ${{ matrix.service }}-frontend \
+          timeout 15m ./node_modules/.bin/nx build ${{ matrix.service }}-frontend \
             --configuration=production \
             --parallel=1 \
             --max-workers=1 \
             --skip-nx-cache \
             --no-daemon \
+            --sourceMap=false \
             --verbose
 
           echo "Build ${{ matrix.service }}-backend..."
-          timeout 20m ./node_modules/.bin/nx build ${{ matrix.service }}-backend \
+          timeout 15m ./node_modules/.bin/nx build ${{ matrix.service }}-backend \
             --configuration=production \
             --parallel=1 \
             --max-workers=1 \
             --skip-nx-cache \
             --no-daemon \
+            --sourceMap=false \
             --verbose
             
       - name: Configure AWS credentials
