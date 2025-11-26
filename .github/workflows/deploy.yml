@@ -13,10 +13,13 @@ jobs:
   # ====================================================
   # BUILD PHASE (6 Parallel Jobs)
   # ====================================================
+  # ====================================================
+  # BUILD PHASE (6 Parallel Jobs)
+  # ====================================================
   build:
     name: Build ${{ matrix.service }}-${{ matrix.type }}
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -34,7 +37,7 @@ jobs:
         with:
           node-version: 20
 
-      # 1. SAFETY: Swap Space (Keep this!)
+      # 1. SAFETY: Swap Space
       - name: Add Swap Space
         run: |
           sudo fallocate -l 4G /swapfile_gha
@@ -42,9 +45,7 @@ jobs:
           sudo mkswap /swapfile_gha
           sudo swapon /swapfile_gha
 
-      # 2. DIAGNOSTICS: Background Resource Monitor
-      # This runs in the background and prints RAM/CPU usage every 30 seconds.
-      # It helps us see if the runner is dead (frozen) or just busy.
+      # 2. MONITOR: Watch for freezes
       - name: Start Resource Monitor
         run: |
           (while true; do
@@ -55,49 +56,51 @@ jobs:
             sleep 30
           done) &
 
+      # 3. INSTALL & BUILD
       - name: Install & Build
         run: |
           cd src/src
 
-          # ENVIRONMENT SETTINGS
+          # ---------------------------------------------------------
+          # CONFIGURATION (The Deadlock Fix)
+          # ---------------------------------------------------------
           export CI=true
           export NX_DAEMON=false
           export NX_TASKS_RUNNER_DYNAMIC_OUTPUT=false 
           export GENERATE_SOURCEMAP=false 
           export FORCE_COLOR=0
-          # Limit Node to 4GB so it triggers GC instead of crashing
+          # 1. Memory Limit: 4GB (Forces GC before Swap)
           export NODE_OPTIONS="--max-old-space-size=4096"
+          # 2. CRITICAL: Force Single Thread I/O (Prevents OS Freeze)
+          export UV_THREADPOOL_SIZE=1
 
           # ---------------------------------------------------------
-          # STEP A: Clean the environment
+          # STEP A: Clean Environment
           # ---------------------------------------------------------
           echo "Removing conflicting dependencies..."
-          # We remove the old package to prevent EOVERRIDE errors
           npm uninstall @swc/core @swc/helpers --no-save
 
           # ---------------------------------------------------------
-          # STEP B: Install the specific compatible versions
+          # STEP B: Install Compatible Versions
           # ---------------------------------------------------------
           echo "Installing fixed SWC versions..."
-          # We explicitly install the version that matches the binary we want
           npm install @swc/core@1.10.7 @swc/helpers@0.5.15 --save-dev --save-exact --no-audit --no-fund
 
           # ---------------------------------------------------------
-          # STEP C: Install project dependencies
+          # STEP C: Install Remaining Dependencies
           # ---------------------------------------------------------
           echo "Installing remaining dependencies..."
-          # We use 'install' (not ci) to accept the changes we just made
           npm install --no-audit --no-fund --ignore-scripts
 
           # ---------------------------------------------------------
-          # STEP D: Ensure Linux Binary is present
+          # STEP D: Ensure Linux Binaries
           # ---------------------------------------------------------
           echo "Fetching Linux Binaries..."
           npm install @swc/core-linux-x64-gnu@1.10.7 --no-save --no-optional --ignore-scripts
           npm install @esbuild/linux-x64@latest --no-save --no-optional --ignore-scripts
 
           # ---------------------------------------------------------
-          # STEP E: Build
+          # STEP E: Build (Serial Mode)
           # ---------------------------------------------------------
           echo "Building ${{ matrix.service }}-${{ matrix.type }}..."
           
