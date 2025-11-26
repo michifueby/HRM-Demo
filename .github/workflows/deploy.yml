@@ -55,44 +55,52 @@ jobs:
             sleep 30
           done) &
 
-      # 3. FIX: FORCE DEPENDENCY RESOLUTION
       - name: Install & Build
         run: |
           cd src/src
 
-          # ENVIRONMENT VARIABLES
+          # ENVIRONMENT SETTINGS
           export CI=true
           export NX_DAEMON=false
           export NX_TASKS_RUNNER_DYNAMIC_OUTPUT=false 
           export GENERATE_SOURCEMAP=false 
           export FORCE_COLOR=0
+          # Limit Node to 4GB so it triggers GC instead of crashing
           export NODE_OPTIONS="--max-old-space-size=4096"
 
           # ---------------------------------------------------------
-          # THE FIX: Force package.json to use the working SWC version
+          # STEP A: Clean the environment
           # ---------------------------------------------------------
-          echo "Applying overrides to fix Binary Mismatch..."
-          
-          # This forces ALL nested dependencies to use the latest SWC
-          npm pkg set overrides.@swc/core="1.10.7" 
-          npm pkg set overrides.@swc/helpers="0.5.15"
+          echo "Removing conflicting dependencies..."
+          # We remove the old package to prevent EOVERRIDE errors
+          npm uninstall @swc/core @swc/helpers --no-save
 
-          # We use 'npm install' instead of 'npm ci' because we just modified package.json
-          # This recalculates the tree and removes the broken 1.5.29 version.
-          echo "Installing dependencies with overrides..."
+          # ---------------------------------------------------------
+          # STEP B: Install the specific compatible versions
+          # ---------------------------------------------------------
+          echo "Installing fixed SWC versions..."
+          # We explicitly install the version that matches the binary we want
+          npm install @swc/core@1.10.7 @swc/helpers@0.5.15 --save-dev --save-exact --no-audit --no-fund
+
+          # ---------------------------------------------------------
+          # STEP C: Install project dependencies
+          # ---------------------------------------------------------
+          echo "Installing remaining dependencies..."
+          # We use 'install' (not ci) to accept the changes we just made
           npm install --no-audit --no-fund --ignore-scripts
 
-          # Re-download the correct Linux binary for the version we just forced
-          echo "Ensuring Linux Binaries..."
+          # ---------------------------------------------------------
+          # STEP D: Ensure Linux Binary is present
+          # ---------------------------------------------------------
+          echo "Fetching Linux Binaries..."
           npm install @swc/core-linux-x64-gnu@1.10.7 --no-save --no-optional --ignore-scripts
           npm install @esbuild/linux-x64@latest --no-save --no-optional --ignore-scripts
 
           # ---------------------------------------------------------
-          # BUILD
+          # STEP E: Build
           # ---------------------------------------------------------
           echo "Building ${{ matrix.service }}-${{ matrix.type }}..."
           
-          # Run build. We removed verbose to prevent buffer locks.
           ./node_modules/.bin/nx build ${{ matrix.service }}-${{ matrix.type }} \
             --configuration=production \
             --parallel=1 \
