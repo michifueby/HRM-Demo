@@ -11,18 +11,17 @@ permissions:
 
 jobs:
   # ====================================================
-  # PHASE 1: BUILD (6 Parallel Jobs)
-  # Each job gets 7GB RAM just for ONE build target
+  # BUILD PHASE (6 Parallel Jobs)
   # ====================================================
   build:
     name: Build ${{ matrix.service }}-${{ matrix.type }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     strategy:
-      fail-fast: false # If 'core' fails, 'metrics' keeps going
+      fail-fast: false
       matrix:
         service: [ core, metrics, activities ]
-        type: [ frontend, backend ] # This creates 3 x 2 = 6 jobs
+        type: [ frontend, backend ]
 
     steps:
       - name: Checkout code
@@ -35,7 +34,7 @@ jobs:
         with:
           node-version: 20
 
-      # 1. SAFETY NET: Keep Swap Space (Prevents OOM crashes)
+      # 1. SAFETY: Swap Space (Keep this!)
       - name: Add Swap Space
         run: |
           sudo fallocate -l 4G /swapfile_gha
@@ -43,7 +42,20 @@ jobs:
           sudo mkswap /swapfile_gha
           sudo swapon /swapfile_gha
 
-     # 2. INSTALL & BUILD SINGLE TARGET
+      # 2. DIAGNOSTICS: Background Resource Monitor
+      # This runs in the background and prints RAM/CPU usage every 30 seconds.
+      # It helps us see if the runner is dead (frozen) or just busy.
+      - name: Start Resource Monitor
+        run: |
+          (while true; do
+            echo "--- [Monitor] Memory & CPU Usage ---"
+            free -m
+            uptime
+            echo "------------------------------------"
+            sleep 30
+          done) &
+
+      # 3. FIX: FORCE DEPENDENCY RESOLUTION
       - name: Install & Build
         run: |
           cd src/src
@@ -53,24 +65,34 @@ jobs:
           export NX_DAEMON=false
           export NX_TASKS_RUNNER_DYNAMIC_OUTPUT=false 
           export GENERATE_SOURCEMAP=false 
-          export UV_THREADPOOL_SIZE=1 
-          # TUNED: Limit Node to 4GB. This forces it to Garbage Collect 
-          # instead of freezing the OS.
+          export FORCE_COLOR=0
           export NODE_OPTIONS="--max-old-space-size=4096"
 
-          # INSTALL
-          echo "Installing dependencies..."
-          npm ci --legacy-peer-deps --omit=optional --no-audit --no-fund --ignore-scripts
+          # ---------------------------------------------------------
+          # THE FIX: Force package.json to use the working SWC version
+          # ---------------------------------------------------------
+          echo "Applying overrides to fix Binary Mismatch..."
           
-          # FIX BINARIES
-          echo "Aligning binaries..."
-          npm install @swc/core@latest @swc/core-linux-x64-gnu@latest --no-save --no-optional --ignore-scripts
-          npm install esbuild@latest @esbuild/linux-x64@latest --no-save --no-optional --ignore-scripts
+          # This forces ALL nested dependencies to use the latest SWC
+          npm pkg set overrides.@swc/core="1.10.7" 
+          npm pkg set overrides.@swc/helpers="0.5.15"
 
+          # We use 'npm install' instead of 'npm ci' because we just modified package.json
+          # This recalculates the tree and removes the broken 1.5.29 version.
+          echo "Installing dependencies with overrides..."
+          npm install --no-audit --no-fund --ignore-scripts
+
+          # Re-download the correct Linux binary for the version we just forced
+          echo "Ensuring Linux Binaries..."
+          npm install @swc/core-linux-x64-gnu@1.10.7 --no-save --no-optional --ignore-scripts
+          npm install @esbuild/linux-x64@latest --no-save --no-optional --ignore-scripts
+
+          # ---------------------------------------------------------
           # BUILD
+          # ---------------------------------------------------------
           echo "Building ${{ matrix.service }}-${{ matrix.type }}..."
           
-          # We removed --verbose to prevent "Silent Freezing"
+          # Run build. We removed verbose to prevent buffer locks.
           ./node_modules/.bin/nx build ${{ matrix.service }}-${{ matrix.type }} \
             --configuration=production \
             --parallel=1 \
@@ -78,19 +100,16 @@ jobs:
             --skip-nx-cache \
             --no-daemon \
             --sourceMap=false
-      # 3. ARTIFACT UPLOAD
-      # We save the build output to pass it to the Deploy job
+
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: build-${{ matrix.service }}-${{ matrix.type }}
-          # Note: Adjust this path if your nx output dir is different
           path: src/dist/apps/${{ matrix.service }}/${{ matrix.type }}
           retention-days: 1
 
   # ====================================================
-  # PHASE 2: DEPLOY
-  # Runs only after the specific service builds succeed
+  # DEPLOY PHASE
   # ====================================================
   deploy:
     needs: build
@@ -107,14 +126,12 @@ jobs:
           role-to-assume: ${{ secrets.ACTIONS_GITHUB_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      # RESTORE FRONTEND
       - name: Download Frontend Artifact
         uses: actions/download-artifact@v4
         with:
           name: build-${{ matrix.service }}-frontend
           path: dist_frontend
 
-      # RESTORE BACKEND
       - name: Download Backend Artifact
         uses: actions/download-artifact@v4
         with:
@@ -123,11 +140,8 @@ jobs:
 
       - name: Deploy Frontend
         run: |
-          # Use the downloaded artifact path
           aws s3 sync dist_frontend \
             s3://hrm-${{ matrix.service }}-frontend/ --delete --cache-control "public, max-age=60"
-          
-          # Invalidate CloudFront
           aws cloudfront create-invalidation \
             --distribution-id ${{ secrets[format('CF_DISTRIBUTION_{0}', matrix.service)] }} \
             --paths "/*"
@@ -135,17 +149,13 @@ jobs:
       - name: Deploy Backend
         run: |
           cd dist_backend
-          # Create zip from the downloaded artifact
           zip -r ../backend.zip . > /dev/null
-          
           VERSION="gha-${{ github.run_id }}-${{ github.run_attempt }}"
-          
           aws elasticbeanstalk create-application-version \
             --application-name hrm-paas \
             --version-label "$VERSION" \
             --source-bundle S3Bucket=hrm-deployments,S3Key="${{ matrix.service }}-backend.zip" \
             --auto-create-application false || true
-            
           aws elasticbeanstalk update-environment \
             --application-name hrm-paas \
             --environment-name hrm-${{ matrix.service }}-backend-env \
