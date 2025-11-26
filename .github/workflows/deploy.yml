@@ -37,7 +37,7 @@ jobs:
         with:
           node-version: 20
 
-      # 1. NEW STEP: Create Swap Space to prevent "Silent Killing" of the build
+      # 1. KEEP THIS STEP (Critical for memory safety)
       - name: Add Swap Space
         run: |
           # Check existing swap for debugging
@@ -53,43 +53,59 @@ jobs:
           echo "Swap created. Memory status:"
           free -h
 
+      # 2. UPDATED BUILD STEP (Native Binaries + Timeout)
       - name: Install dependencies + Build
         run: |
           cd src/src
 
-          # 2. CONFIGURATION: Disable Animations & Set Limits
+          # ENVIRONMENT CONFIG
+          # We REMOVE 'max-old-space-size' because we have Swap now.
           export CI=true
           export NX_DAEMON=false
-          # This disables the dynamic spinner that freezes CI logs
+          export NX_INTERACTIVE=false
+          export NX_HEADLESS=true
           export NX_TASKS_RUNNER_DYNAMIC_OUTPUT=false 
           export UV_THREADPOOL_SIZE=1
-          # We increase Node limit slightly because we now have Swap space
-          export NODE_OPTIONS="--max-old-space-size=4096"
 
-          # 3. INSTALL: Safe install (ignoring scripts)
+          # INSTALL DEPENDENCIES
           echo "Installing dependencies..."
-          npm ci --legacy-peer-deps --omit=optional --no-audit --no-fund --ignore-scripts
+          npm ci --legacy-peer-deps --omit=optional --no-audit --no-fund
 
-          # 4. REBUILD: Ensure binaries exist
-          echo "Rebuilding build tools..."
-          npm rebuild @swc/core esbuild
+          # FORCE LINUX BINARIES
+          # This downloads the specific binary needed for ubuntu-latest
+          echo "Forcing Linux Binaries for SWC/Esbuild..."
+          npm install @swc/core-linux-x64-gnu --no-save --no-optional
+          npm install @esbuild/linux-x64 --no-save --no-optional
 
-          # 5. BUILD: Sequential execution
-          echo "Build ${{ matrix.service }}-frontend..."
-          ./node_modules/.bin/nx build ${{ matrix.service }}-frontend \
+          # BUILD WITH TIMEOUT
+          # If this hangs for 20m, it will kill itself and print the error
+          
+          echo "Build ${{ matrix.service }}-frontend (Timeout: 20m)..."
+          timeout 20m ./node_modules/.bin/nx build ${{ matrix.service }}-frontend \
             --configuration=production \
             --parallel=1 \
             --max-workers=1 \
             --skip-nx-cache \
-            --no-daemon
+            --no-daemon \
+            --verbose
 
-          echo "Build ${{ matrix.service }}-backend..."
-          ./node_modules/.bin/nx build ${{ matrix.service }}-backend \
+          echo "Build ${{ matrix.service }}-backend (Timeout: 20m)..."
+          timeout 20m ./node_modules/.bin/nx build ${{ matrix.service }}-backend \
             --configuration=production \
             --parallel=1 \
             --max-workers=1 \
             --skip-nx-cache \
-            --no-daemon
+            --no-daemon \
+            --verbose
+
+          echo "Build ${{ matrix.service }}-backend (Timeout: 20m)..."
+          timeout 20m ./node_modules/.bin/nx build ${{ matrix.service }}-backend \
+            --configuration=production \
+            --parallel=1 \
+            --max-workers=1 \
+            --skip-nx-cache \
+            --no-daemon \
+            --verbose
             
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
