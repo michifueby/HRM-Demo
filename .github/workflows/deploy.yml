@@ -58,45 +58,52 @@ jobs:
         run: |
           cd src/src
 
-          # 1. ENVIRONMENT: Optimize for Speed/Memory
+          # 1. ENVIRONMENT: Maximum Memory & Zero Noise
           export CI=true
           export NX_DAEMON=false
-          # Disable Source Maps (Huge memory saver for React/Webpack/Vite)
+          export NX_Interactive=false
+          # Disable colors and dynamic output to prevent buffer freezing
+          export NX_TASKS_RUNNER_DYNAMIC_OUTPUT=false 
+          export FORCE_COLOR=0
+          # Disable Source Maps (Critical for speed)
           export GENERATE_SOURCEMAP=false 
-          # Prevent Node from grabbing all 7GB at once (leave room for OS)
-          export NODE_OPTIONS="--max-old-space-size=4096"
+          
+          # CRITICAL: Re-enable Single Threading (It is safer)
+          export UV_THREADPOOL_SIZE=1
+          
+          # CRITICAL: Allow Node to use 6GB of RAM (leaving 1GB + 4GB Swap for OS)
+          export NODE_OPTIONS="--max-old-space-size=6144"
 
-          # 2. INSTALL (Fast & Safe)
+          # 2. INSTALL
           echo "Installing dependencies..."
           npm ci --legacy-peer-deps --omit=optional --no-audit --no-fund --ignore-scripts
 
-          # 3. BINARIES (Align Versions)
+          # 3. BINARIES
           echo "Aligning binaries..."
           npm install @swc/core@latest @swc/core-linux-x64-gnu@latest --no-save --no-optional --ignore-scripts
           npm install esbuild@latest @esbuild/linux-x64@latest --no-save --no-optional --ignore-scripts
 
-          # 4. LIGHTWEIGHT BUILD
-          # We add --sourceMap=false to explicitly tell Nx/Webpack to save memory.
+          # 4. SILENT BUILD (No Verbose)
+          # We removed --verbose. We rely on the exit code.
+          # We increased timeout to 25m because single-thread is slow but stable.
           
-          echo "Build ${{ matrix.service }}-frontend..."
-          timeout 15m ./node_modules/.bin/nx build ${{ matrix.service }}-frontend \
+          echo "Build core-frontend..."
+          timeout 25m ./node_modules/.bin/nx build core-frontend \
             --configuration=production \
             --parallel=1 \
             --max-workers=1 \
             --skip-nx-cache \
             --no-daemon \
-            --sourceMap=false \
-            --verbose
+            --sourceMap=false
 
-          echo "Build ${{ matrix.service }}-backend..."
-          timeout 15m ./node_modules/.bin/nx build ${{ matrix.service }}-backend \
+          echo "Build core-backend..."
+          timeout 25m ./node_modules/.bin/nx build core-backend \
             --configuration=production \
             --parallel=1 \
             --max-workers=1 \
             --skip-nx-cache \
             --no-daemon \
-            --sourceMap=false \
-            --verbose
+            --sourceMap=false
             
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
