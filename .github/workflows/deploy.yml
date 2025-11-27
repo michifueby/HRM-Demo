@@ -178,28 +178,33 @@ jobs:
           # 1. PREPARE NAMES
           SERVICE_NAME="${{ matrix.service }}"
           CLEAN_NAME=${SERVICE_NAME#hr-} 
-          DEPLOY_BUCKET="hrm-deployments-mf" # 
+          DEPLOY_BUCKET="hrm-deployments-mf" 
 
-          # 2. ZIP & UPLOAD
+          # 2. Create Procfile
           cd dist_backend
+          
+          # This tells AWS explicitly how to start the app
+          echo "web: node main.js" > Procfile
+          
+          # 3. ZIP ARTIFACT
+          # We zip '.' (current directory) which now includes main.js, package.json, AND Procfile
           zip -r ../${SERVICE_NAME}-backend.zip . > /dev/null
           cd ..
           
+          # 4. UPLOAD TO S3
           echo "Uploading to S3..."
           aws s3 cp ${SERVICE_NAME}-backend.zip s3://$DEPLOY_BUCKET/${SERVICE_NAME}-backend.zip
 
-          # 3. CREATE UNIQUE VERSION LABEL
+          # 5. CREATE UNIQUE VERSION LABEL
           VERSION="gha-${{ github.run_id }}-${{ github.run_attempt }}-${SERVICE_NAME}"
           
-          echo "Creating Version: $VERSION"
-
           aws elasticbeanstalk create-application-version \
             --application-name hrm-paas \
             --version-label "$VERSION" \
             --source-bundle S3Bucket=$DEPLOY_BUCKET,S3Key="${SERVICE_NAME}-backend.zip" \
             --no-auto-create-application
           
-          # 4. UPDATE ENVIRONMENT
+          # 6. UPDATE ENVIRONMENT
           aws elasticbeanstalk update-environment \
             --application-name hrm-paas \
             --environment-name hrm-${CLEAN_NAME}-backend-env \
