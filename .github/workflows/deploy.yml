@@ -13,9 +13,6 @@ jobs:
   # ====================================================
   # BUILD PHASE (6 Parallel Jobs)
   # ====================================================
-  # ====================================================
-  # BUILD PHASE (6 Parallel Jobs)
-  # ====================================================
   build:
     name: Build ${{ matrix.service }}-${{ matrix.type }}
     runs-on: ubuntu-latest
@@ -56,57 +53,48 @@ jobs:
             sleep 30
           done) &
 
-# 3. INSTALL & BUILD
-      - name: Install & Build
+      # 3. INSTALL & BUILD
+      - name: Install dependencies + Build
         run: |
           cd src/src
 
-          # ---------------------------------------------------------
-          # CONFIGURATION
-          # ---------------------------------------------------------
+          # 1. ENVIRONMENT: Unshackled
+          # We REMOVED 'UV_THREADPOOL_SIZE=1' to allow the CPU to run fast again.
+          # We REMOVED 'max-old-space-size' to let Node manage its own memory (using Swap if needed).
           export CI=true
           export NX_DAEMON=false
           export NX_TASKS_RUNNER_DYNAMIC_OUTPUT=false 
-          export GENERATE_SOURCEMAP=false 
           export FORCE_COLOR=0
-          # Memory: 4GB
-          export NODE_OPTIONS="--max-old-space-size=4096"
-          # Threading: Single Thread (Vital for Swap usage)
-          export UV_THREADPOOL_SIZE=1
+          export GENERATE_SOURCEMAP=false 
 
-          # ---------------------------------------------------------
-          # STEP A: Clean Environment
-          # ---------------------------------------------------------
-          echo "Removing conflicting dependencies..."
-          npm uninstall @swc/core @swc/helpers --no-save
+          # 2. INSTALL (Aggressive Fix)
+          # We use 'npm install' instead of 'npm ci'.
+          # Why? Your package-lock.json has broken/old versions of @swc/core (v1.5).
+          # 'npm install' will update them to what Nx actually needs (v1.10+) automatically.
+          echo "Installing dependencies (Force Resolve)..."
+          npm install --legacy-peer-deps --no-audit --no-fund --ignore-scripts
 
-          # ---------------------------------------------------------
-          # STEP B: Install Compatible Versions (UPDATED to 1.15.3)
-          # ---------------------------------------------------------
-          echo "Installing fixed SWC versions..."
-          # We bump to 1.15.3 to satisfy the Nx requirement seen in your logs
-          npm install @swc/core@1.15.3 @swc/helpers@0.5.15 --save-dev --save-exact --no-audit --no-fund
+          # 3. ENSURE BINARIES
+          # We explicitly add the linux binary just to be safe.
+          echo "Ensuring Linux Binaries..."
+          npm install @swc/core-linux-x64-gnu --no-save --no-optional --ignore-scripts
+          npm install @esbuild/linux-x64 --no-save --no-optional --ignore-scripts
 
-          # ---------------------------------------------------------
-          # STEP C: Install Remaining Dependencies
-          # ---------------------------------------------------------
-          echo "Installing remaining dependencies..."
-          npm install --no-audit --no-fund --ignore-scripts
-
-          # ---------------------------------------------------------
-          # STEP D: Ensure Linux Binaries (UPDATED to 1.15.3)
-          # ---------------------------------------------------------
-          echo "Fetching Linux Binaries..."
-          # Must match the core version exactly
-          npm install @swc/core-linux-x64-gnu@1.15.3 --no-save --no-optional --ignore-scripts
-          npm install @esbuild/linux-x64@latest --no-save --no-optional --ignore-scripts
-
-          # ---------------------------------------------------------
-          # STEP E: Build (Serial Mode)
-          # ---------------------------------------------------------
-          echo "Building ${{ matrix.service }}-${{ matrix.type }}..."
+          # 4. BUILD (High Timeout)
+          # We set timeout to 60m. 
+          # We allow parallel=1 but we removed the CPU throttle, so it should be much faster.
           
-          ./node_modules/.bin/nx build ${{ matrix.service }}-${{ matrix.type }} \
+          echo "Build ${{ matrix.service }}-frontend (Timeout: 60m)..."
+          timeout 60m ./node_modules/.bin/nx build ${{ matrix.service }}-frontend \
+            --configuration=production \
+            --parallel=1 \
+            --max-workers=1 \
+            --skip-nx-cache \
+            --no-daemon \
+            --sourceMap=false
+
+          echo "Build ${{ matrix.service }}-backend (Timeout: 60m)..."
+          timeout 60m ./node_modules/.bin/nx build ${{ matrix.service }}-backend \
             --configuration=production \
             --parallel=1 \
             --max-workers=1 \
