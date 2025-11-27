@@ -20,7 +20,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [ core, metrics, activities ]
+        service: [ hr-core, hr-metrics, hr-activities ]
         type: [ frontend, backend ]
 
     steps:
