@@ -60,7 +60,6 @@ jobs:
 
           # 1. ENVIRONMENT
           export CI=true
-          export NX_DAEMON=false
           export FORCE_COLOR=0
           export GENERATE_SOURCEMAP=false 
           # Keep high memory limit (Swap handles the rest)
@@ -74,15 +73,12 @@ jobs:
           npm install --save-dev @swc/core@latest @swc/helpers@latest --ignore-scripts
           rm -rf node_modules/.cache .nx
 
-          # 4. BUILD
-          # We REMOVED '--max-workers=1' to fix the schema error.
-          
+          # 4. BUILD          
           echo "Build ${{ matrix.service }}-frontend..."
           timeout 25m ./node_modules/.bin/nx build ${{ matrix.service }}-frontend \
             --configuration=production \
             --parallel=1 \
             --skip-nx-cache \
-            --no-daemon \
             --sourceMap=false
 
           echo "Build ${{ matrix.service }}-backend..."
@@ -90,7 +86,6 @@ jobs:
             --configuration=production \
             --parallel=1 \
             --skip-nx-cache \
-            --no-daemon \
             --sourceMap=false
 
       - name: Upload Artifact
