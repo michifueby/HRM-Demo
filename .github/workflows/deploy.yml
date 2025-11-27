@@ -94,11 +94,16 @@ jobs:
             --skip-nx-cache \
             --sourceMap=false
 
+      - name: Debug - List Build Output
+        run: |
+          echo "Looking for dist folder..."
+          ls -R src/src/dist || echo "Dist folder not found in src/src/dist"
+
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: build-${{ matrix.service }}-${{ matrix.type }}
-          path: src/dist/apps/${{ matrix.service }}/${{ matrix.type }}
+          path: src/src/dist/apps/${{ matrix.service }}-${{ matrix.type }}
           retention-days: 1
 
   # ====================================================
