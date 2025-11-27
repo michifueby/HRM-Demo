@@ -132,74 +132,80 @@ flowchart TB
 
 Every push to `main` → fully automated deploy.
 
-Deployment docs
+## Deployment docs
 
-1. Create an IAM OIDC Identity Provider for GitHub (5 min)
-This removes the need for AWS keys in GitHub Secrets — 100% secure
+1. Create an IAM OIDC Identity Provider for GitHub
+  This removes the need for AWS keys in GitHub Secrets — 100% secure
 
-Open AWS Console → IAM → Identity providers → Add provider
-Provider type: OpenID Connect
-Provider URL: https://token.actions.githubusercontent.com
-Audience: `sts.amazonaws.com
-Click “Get thumbprint” → Add provider
-→ Name it GitHubActionsProvider
+  Open AWS Console → IAM → Identity providers → Add provider
+  Provider type: OpenID Connect
+  Provider URL: https://token.actions.githubusercontent.com
+  Audience: `sts.amazonaws.com
+  Click “Get thumbprint” → Add provider
+  → Name it GitHubActionsProvider
 
-2. Create one IAM Role that GitHub Actions will assume (5 min)
+2. Create one IAM Role that GitHub Actions will assume
+  IAM → Roles → Create role
 
-IAM → Roles → Create role
-Trusted entity type: Web identity
-Identity provider: the one you just created (GitHubActionsProvider)
-Audience: sts.amazonaws.com
-Add condition (important!):
-StringEquals
-Key: token.actions.githubusercontent.com:sub
-Value: repo:YOUR_GITHUB_USERNAME/HRM-Demo:ref:refs/heads/main
-(replace with your real username/repo)
-Attach these managed policies:
-AmazonS3FullAccess (or a custom narrower one)
-AWSElasticBeanstalkFullAccess
-CloudFrontFullAccess (or custom)
-AWSCloudFormationFullAccess (Beanstalk needs it)
+  Trusted entity type: Web identity
 
-Name the role: GitHubActionsDeployRole
-Copy the full ARN — you’ll need it in step 8
+  Identity provider: the one you just created (GitHubActionsProvider)
 
-3. Create 3 S3 Buckets for the frontends (5 min)
-For each app create one bucket (must be globally unique names):
-texthrm-core-frontend
-hrm-metrics-frontend
-hrm-activities-frontend
-Settings for each bucket:
+  Audience: sts.amazonaws.com
 
-Block ALL public access → OFF (we need public read)
-Enable Static website hosting → Index document: index.html
-Bucket policy (paste this and replace bucket name):
+  Add condition (important!):
+  StringEquals
+  Key: token.actions.githubusercontent.com:sub
+  Value: repo:YOUR_GITHUB_USERNAME/HRM-Demo:ref:refs/heads/main
+  (replace with your real username/repo)
 
-JSON{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Sid": "PublicReadGetObject",
-      "Effect": "Allow",
-      "Principal": "*",
-      "Action": "s3:GetObject",
-      "Resource": "arn:aws:s3:::hrm-core-frontend/*"
-    }
-  ]
-}
-4. Create 3 CloudFront Distributions (one per frontend) (8 min)
-For each bucket:
+  Attach these managed policies:
+  AmazonS3FullAccess (or a custom narrower one)
+  AWSElasticBeanstalkFullAccess
+  CloudFrontFullAccess (or custom)
+  AWSCloudFormationFullAccess (Beanstalk needs it)
 
-CloudFront → Create distribution
-Origin domain: choose your S3 bucket (the .s3.amazonaws.com one)
-Viewer protocol policy: Redirect HTTP → HTTPS
-Price class: Use all edge locations (best performance)
-Alternate domain name (CNAME): core.yourdomain.com (optional but nice)
-Default root object: index.html
-Create → wait 5–10 min until Deployed
-Copy the Distribution ID (e.g. E1234567890ABC) — you will add it to GitHub Secrets
+  Name the role: GitHubActionsDeployRole
+  Copy the full ARN — you’ll need it in step 8
 
-5. Create one Elastic Beanstalk Application + 3 Environments (8 min)
+1. Create 3 S3 Buckets for the frontends
+  For each app create one bucket (must be globally unique names):
+  texthrm-core-frontend
+  hrm-metrics-frontend
+  hrm-activities-frontend
+  
+  Settings for each bucket:
+
+  Block ALL public access → OFF (we need public read)
+  Enable Static website hosting → Index document: index.html
+  Bucket policy (paste this and replace bucket name):
+
+  JSON{
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Sid": "PublicReadGetObject",
+        "Effect": "Allow",
+        "Principal": "*",
+        "Action": "s3:GetObject",
+        "Resource": "arn:aws:s3:::hrm-core-frontend/*"
+      }
+    ]
+  }
+
+1. Create 3 CloudFront Distributions (one per frontend)
+  For each bucket:
+
+  CloudFront → Create distribution
+  Origin domain: choose your S3 bucket (the .s3.amazonaws.com one)
+  Viewer protocol policy: Redirect HTTP → HTTPS
+  Price class: Use all edge locations (best performance)
+  Alternate domain name (CNAME): core.yourdomain.com (optional but nice)
+  Default root object: index.html
+  Create → wait 5–10 min until Deployed
+  Copy the Distribution ID -> Add it to Github secrets
+
+1. Create one Elastic Beanstalk Application + 3 Environments
 
 Elastic Beanstalk → Create application
 Name: hrm-paas
@@ -215,146 +221,240 @@ Create environment → wait ~5 min
 
 
 6. Add secrets to your GitHub repository (2 min)
-Go to your repo → Settings → Secrets and variables → Actions → New repository secret
-Add these 6 secrets:
+  Go to your repo → Settings → Secrets and variables → Actions → New repository secret
+  Add these 6 secrets:
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-Secret nameValue (copy from AWS)AWS_REGIONeu-central-1 (or your region)CF_DISTRIBUTION_coreDistribution ID of core CloudFrontCF_DISTRIBUTION_metricsDistribution ID of metrics CloudFrontCF_DISTRIBUTION_activitiesDistribution ID of activities CloudFrontGITHUB_ACTIONS_ROLE_ARNARN of the role you created in step 2
-1. Final GitHub Actions workflow 
-.github/workflows/deploy.yml
+  Secret nameValue (copy from AWS)
+  
+  AWS_REGIONeu-central-1 (or your region)
+  
+  CF_DISTRIBUTION_coreDistribution ID of core CloudFront
+  
+  CF_DISTRIBUTION_metricsDistribution ID of metrics CloudFront
+  
+  CF_DISTRIBUTION_activitiesDistribution ID of activities CloudFront
+  
+  GITHUB_ACTIONS_ROLE_ARNARN of the role you created in step 2
+  
+7. Final GitHub Actions workflow 
+  .github/workflows/deploy.yml
 
 ```yml
-name: Deploy to AWS
+name: Deploy HRM PaaS to AWS
 
 on:
   push:
     branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
 
 jobs:
-  deploy:
+  # ====================================================
+  # BUILD PHASE (6 Parallel Jobs)
+  # ====================================================
+  build:
+    name: Build ${{ matrix.service }}-${{ matrix.type }}
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-
+    timeout-minutes: 45
     strategy:
+      fail-fast: false
       matrix:
-        service: [core, metrics, activities]
+        service: [ hr-core, hr-metrics, hr-activities ]
+        type: [ frontend, backend ]
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          path: src
 
-      - name: Setup Node
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
 
-      - run: npm ci
-      - run: npx nx run-many -t build --projects=${{ matrix.service }}-frontend},${{ matrix.service }}-backend --configuration=production
+      # 1. SAFETY: Swap Space
+      - name: Add Swap Space
+        run: |
+          sudo fallocate -l 4G /swapfile_gha
+          sudo chmod 600 /swapfile_gha
+          sudo mkswap /swapfile_gha
+          sudo swapon /swapfile_gha
 
-      - name: Configure AWS credentials (OIDC)
+      # 2. MONITOR: Watch for freezes
+      - name: Start Resource Monitor
+        run: |
+          (while true; do
+            echo "--- [Monitor] Memory & CPU Usage ---"
+            free -m
+            uptime
+            echo "------------------------------------"
+            sleep 30
+          done) &
+
+      # 3. INSTALL & BUILD
+      - name: Install dependencies + Build
+        run: |
+          cd src/src
+
+          # 1. ENVIRONMENT
+          export CI=true
+          export FORCE_COLOR=0
+          export GENERATE_SOURCEMAP=false 
+          # Keep high memory limit (Swap handles the rest)
+          export NODE_OPTIONS="--max-old-space-size=6144"
+
+          # 2. INSTALL
+          npm ci --legacy-peer-deps --omit=optional --no-audit --no-fund --ignore-scripts
+
+          # 3. FORCE UPGRADE (Vital to prevent the hang)
+          echo "Forcing SWC & Esbuild Installation..."
+          npm install --save-dev \
+            @swc/core@latest \
+            @swc/helpers@latest \
+            esbuild@latest \
+            @esbuild/linux-x64@latest \
+            --ignore-scripts
+            
+          rm -rf node_modules/.cache .nx
+
+          # 4. BUILD          
+          echo "Build ${{ matrix.service }}-frontend..."
+          timeout 25m ./node_modules/.bin/nx build ${{ matrix.service }}-frontend \
+            --configuration=production \
+            --parallel=1 \
+            --skip-nx-cache \
+            --sourceMap=false
+
+          echo "Build ${{ matrix.service }}-backend..."
+          timeout 25m ./node_modules/.bin/nx build ${{ matrix.service }}-backend \
+            --configuration=production \
+            --parallel=1 \
+            --skip-nx-cache \
+            --sourceMap=false
+
+      - name: Debug - List Build Output
+        run: |
+          echo "Looking for dist folder..."
+          ls -R src/src/dist || echo "Dist folder not found in src/src/dist"
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ matrix.service }}-${{ matrix.type }}
+          path: src/src/dist/apps/${{ matrix.service }}/${{ matrix.type }}
+          if-no-files-found: error
+          retention-days: 1
+
+  # ====================================================
+  # DEPLOY PHASE
+  # ====================================================
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      matrix:
+        service: [ hr-core, hr-metrics, hr-activities ]
+    
+    steps:
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.GITHUB_ACTIONS_ROLE_ARN }}
+          role-to-assume: ${{ secrets.ACTIONS_GITHUB_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      }}
+      - name: Download Frontend Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: build-${{ matrix.service }}-frontend
+          path: dist_frontend
 
-      - name: Deploy Frontend → S3 + CloudFront
-        run: |
-          aws s3 sync dist/apps/${{ matrix.service }}/frontend s3://hrm-${{ matrix.service }}-frontend --delete --cache-control max-age=60
-          aws cloudfront create-invalidation --distribution-id ${{ secrets['CF_DISTRIBUTION_' matrix.service] }} --paths "/*"
+      - name: Download Backend Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: build-${{ matrix.service }}-backend
+          path: dist_backend
 
-      - name: Deploy Backend → Elastic Beanstalk
+      - name: Deploy Frontend
+        env:
+          # 1. SECRET MAPPING 
+          CLOUDFRONT_ID: ${{ 
+            matrix.service == 'hr-core' && secrets.CF_DISTRIBUTION_HR_CORE || 
+            matrix.service == 'hr-metrics' && secrets.CF_DISTRIBUTION_HR_METRICS || 
+            matrix.service == 'hr-activities' && secrets.CF_DISTRIBUTION_HR_ACTIVITIES 
+            }}
         run: |
-          cd dist/apps/${{ matrix.service }}/backend
-          zip -r ../../${{ matrix.service }}-backend.zip .
+          # 2. FIX S3 PATH 
+          # We define the source path. If the 'browser' subfolder exists (Angular), we use that.
+          SOURCE_PATH="dist_frontend"
+          if [ -d "dist_frontend/browser" ]; then
+            SOURCE_PATH="dist_frontend/browser"
+          fi
+          
+          echo "Deploying content from $SOURCE_PATH to root of S3..."
+
+          # We sync the CONTENTS of the browser folder to the ROOT of the bucket
+          aws s3 sync $SOURCE_PATH s3://hrm-${{ matrix.service }}-frontend/ \
+            --delete \
+            --cache-control "public, max-age=60"
+
+          # 3. DEBUG & INVALIDATE CLOUDFRONT
+          if [ -z "$CLOUDFRONT_ID" ]; then
+            echo "❌ ERROR: CloudFront Secret is empty!"
+            echo "Expected one of these secrets to exist:"
+            echo " - CF_DISTRIBUTION_HR_CORE"
+            echo " - CF_DISTRIBUTION_HR_METRICS"
+            echo " - CF_DISTRIBUTION_HR_ACTIVITIES"
+            exit 1
+          fi
+
+          echo "✅ Found Distribution ID: $CLOUDFRONT_ID"
+          aws cloudfront create-invalidation --distribution-id "$CLOUDFRONT_ID" --paths "/*"
+          
+      - name: Deploy Backend
+        run: |
+          # 1. PREPARE NAMES
+          SERVICE_NAME="${{ matrix.service }}"
+          CLEAN_NAME=${SERVICE_NAME#hr-} 
+          DEPLOY_BUCKET="hrm-deployments-mf" 
+
+          # 2. Create Procfile
+          cd dist_backend
+          
+          # This tells AWS explicitly how to start the app
+          echo "web: node main.js" > Procfile
+          
+          # 3. ZIP ARTIFACT
+          # We zip '.' (current directory) which now includes main.js, package.json, AND Procfile
+          zip -r ../${SERVICE_NAME}-backend.zip . > /dev/null
+          cd ..
+          
+          # 4. UPLOAD TO S3
+          echo "Uploading to S3..."
+          aws s3 cp ${SERVICE_NAME}-backend.zip s3://$DEPLOY_BUCKET/${SERVICE_NAME}-backend.zip
+
+          # 5. CREATE UNIQUE VERSION LABEL
+          VERSION="gha-${{ github.run_id }}-${{ github.run_attempt }}-${SERVICE_NAME}"
+          
           aws elasticbeanstalk create-application-version \
             --application-name hrm-paas \
-            --version-label "v${{ github.sha::8 }}" \
-            --source-bundle S3Bucket="hrm-deployments",S3Key="${{ matrix.service }}-backend.zip"
+            --version-label "$VERSION" \
+            --source-bundle S3Bucket=$DEPLOY_BUCKET,S3Key="${SERVICE_NAME}-backend.zip" \
+            --no-auto-create-application
+          
+          # 6. UPDATE ENVIRONMENT
           aws elasticbeanstalk update-environment \
             --application-name hrm-paas \
-            --environment-name hrm-${{ matrix.service }}-backend-env \
-            --version-label "v${{ github.sha::8 }}"
+            --environment-name hrm-${CLEAN_NAME}-backend-env \
+            --version-label "$VERSION"
 ```
 
-## Project structure
-hrm-project/
-├── apps/                  
-│   ├── hr-core/           
-│   │   ├── backend/       # Node/Express backend
-│   │   │   ├── src/
-│   │   │   │   ├── config/       # Env configs, keys (e.g., db, auth)
-│   │   │   │   ├── controllers/  # Handle requests/responses
-│   │   │   │   ├── middleware/   # Auth, logging, error handling
-│   │   │   │   ├── models/       # Data schemas (e.g., Mongoose if using Mongo)
-│   │   │   │   ├── routes/       # API endpoints
-│   │   │   │   ├── services/     # Business logic, integrations (e.g., LDAP, external APIs)
-│   │   │   │   ├── utils/        # Helpers (e.g., validators, encryptors)
-│   │   │   │   └── app.js        # Main Express app setup
-│   │   │   ├── tests/            # Unit/integration tests (Jest)
-│   │   │   ├── .env.example      # Sample env file
-│   │   │   ├── Dockerfile        # For containerization
-│   │   │   ├── package.json      # Backend deps (express, dotenv, etc.)
-│   │   │   └── tsconfig.json     # If using TypeScript
-│   │   └── frontend/      # Angular frontend
-│   │       ├── src/
-│   │       │   ├── app/
-│   │       │   │   ├── core/          # Shared services, guards, interceptors
-│   │       │   │   ├── features/      # Feature modules
-│   │       │   │   ├── shared/        # Reusable components, pipes, directives
-│   │       │   │   ├── app.component.ts
-│   │       │   │   ├── app.module.ts
-│   │       │   │   └── app-routing.module.ts
-│   │       │   ├── assets/            # Static files (images, CSS, PDFs)
-│   │       │   ├── environments/      # Env configs (dev/prod)
-│   │       │   └── index.html         # Entry point
-│   │       ├── angular.json           # Angular CLI config
-│   │       ├── Dockerfile             # For containerization (optional if serving via backend)
-│   │       ├── package.json           # Frontend deps (@angular/core, rxjs, etc.)
-│   │       └── tsconfig.json
-│   ├── hr-metrics/    # Similar structure as hr-core
-│   └── hr-activities/ # Similar structure as hr-core
-├── libs/                  # Shared libraries (e.g., common utils, types)
-├── tools/                 # Scripts for CI/CD, migrations
-├── .eslintrc.json         # Linting rules
-├── .prettierrc            # Formatting
-├── .gitignore
-├── nx.json                # If using Nx for monorepo
-├── package.json           # Root deps (dev tools like husky for hooks)
-├── README.md              # Project overview, setup instructions
-└── docker-compose.yml     # For local dev (compose all apps with DB proxy)
-
-## Building / Running
+## Building / Running local
 
 Running command
 ```bash
