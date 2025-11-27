@@ -1,4 +1,4 @@
-import { Injectable, inject } from '@angular/core';
+import { Inject, Injectable, InjectionToken, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, timer } from 'rxjs';
 import { switchMap, shareReplay } from 'rxjs/operators';
@@ -15,6 +15,8 @@ export interface ServerTimeResponse {
   app: string;
   version?: string;
 }
+
+export const API_URL = new InjectionToken<string>('API_URL');
 
 @Injectable({
   providedIn: 'root'
@@ -38,6 +40,11 @@ export class TimeService {
     // If served by backend (same origin), use relative path
     return '';
   }
+
+ constructor(
+    // eslint-disable-next-line @angular-eslint/prefer-inject
+    @Inject(API_URL) private apiUrl: string
+  ) {}
 
   /**
    * Cached server time Observable (auto-refreshes every 30s)
