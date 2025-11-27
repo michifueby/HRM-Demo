@@ -69,8 +69,14 @@ jobs:
           npm ci --legacy-peer-deps --omit=optional --no-audit --no-fund --ignore-scripts
 
           # 3. FORCE UPGRADE (Vital to prevent the hang)
-          echo "Forcing SWC Upgrade..."
-          npm install --save-dev @swc/core@latest @swc/helpers@latest --ignore-scripts
+          echo "Forcing SWC & Esbuild Installation..."
+          npm install --save-dev \
+            @swc/core@latest \
+            @swc/helpers@latest \
+            esbuild@latest \
+            @esbuild/linux-x64@latest \
+            --ignore-scripts
+            
           rm -rf node_modules/.cache .nx
 
           # 4. BUILD          
