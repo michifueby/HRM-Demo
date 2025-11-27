@@ -94,11 +94,17 @@ jobs:
             --skip-nx-cache \
             --sourceMap=false
 
+      - name: Debug - List Build Output
+        run: |
+          echo "Looking for dist folder..."
+          ls -R src/src/dist || echo "Dist folder not found in src/src/dist"
+
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: build-${{ matrix.service }}-${{ matrix.type }}
-          path: src/dist/apps/${{ matrix.service }}/${{ matrix.type }}
+          path: src/src/dist/apps/${{ matrix.service }}/${{ matrix.type }}
+          if-no-files-found: error
           retention-days: 1
 
   # ====================================================
@@ -110,7 +116,7 @@ jobs:
     timeout-minutes: 15
     strategy:
       matrix:
-        service: [ core, metrics, activities ]
+        service: [ hr-core, hr-metrics, hr-activities ]
     
     steps:
       - name: Configure AWS credentials
@@ -132,24 +138,69 @@ jobs:
           path: dist_backend
 
       - name: Deploy Frontend
+        env:
+          # 1. SECRET MAPPING 
+          CLOUDFRONT_ID: ${{ 
+            matrix.service == 'hr-core' && secrets.CF_DISTRIBUTION_HR_CORE || 
+            matrix.service == 'hr-metrics' && secrets.CF_DISTRIBUTION_HR_METRICS || 
+            matrix.service == 'hr-activities' && secrets.CF_DISTRIBUTION_HR_ACTIVITIES 
+            }}
         run: |
-          aws s3 sync dist_frontend \
-            s3://hrm-${{ matrix.service }}-frontend/ --delete --cache-control "public, max-age=60"
-          aws cloudfront create-invalidation \
-            --distribution-id ${{ secrets[format('CF_DISTRIBUTION_{0}', matrix.service)] }} \
-            --paths "/*"
+          # 2. FIX S3 PATH 
+          # We define the source path. If the 'browser' subfolder exists (Angular), we use that.
+          SOURCE_PATH="dist_frontend"
+          if [ -d "dist_frontend/browser" ]; then
+            SOURCE_PATH="dist_frontend/browser"
+          fi
+          
+          echo "Deploying content from $SOURCE_PATH to root of S3..."
 
+          # We sync the CONTENTS of the browser folder to the ROOT of the bucket
+          aws s3 sync $SOURCE_PATH s3://hrm-${{ matrix.service }}-frontend/ \
+            --delete \
+            --cache-control "public, max-age=60"
+
+          # 3. DEBUG & INVALIDATE CLOUDFRONT
+          if [ -z "$CLOUDFRONT_ID" ]; then
+            echo "❌ ERROR: CloudFront Secret is empty!"
+            echo "Expected one of these secrets to exist:"
+            echo " - CF_DISTRIBUTION_HR_CORE"
+            echo " - CF_DISTRIBUTION_HR_METRICS"
+            echo " - CF_DISTRIBUTION_HR_ACTIVITIES"
+            exit 1
+          fi
+
+          echo "✅ Found Distribution ID: $CLOUDFRONT_ID"
+          aws cloudfront create-invalidation --distribution-id "$CLOUDFRONT_ID" --paths "/*"
+          
       - name: Deploy Backend
         run: |
+          # 1. PREPARE NAMES
+          SERVICE_NAME="${{ matrix.service }}"
+          CLEAN_NAME=${SERVICE_NAME#hr-} 
+          DEPLOY_BUCKET="hrm-deployments-mf" # 
+
+          # 2. ZIP & UPLOAD
           cd dist_backend
-          zip -r ../backend.zip . > /dev/null
-          VERSION="gha-${{ github.run_id }}-${{ github.run_attempt }}"
+          zip -r ../${SERVICE_NAME}-backend.zip . > /dev/null
+          cd ..
+          
+          echo "Uploading to S3..."
+          aws s3 cp ${SERVICE_NAME}-backend.zip s3://$DEPLOY_BUCKET/${SERVICE_NAME}-backend.zip
+
+          # 3. CREATE UNIQUE VERSION LABEL
+          VERSION="gha-${{ github.run_id }}-${{ github.run_attempt }}-${SERVICE_NAME}"
+          
+          echo "Creating Version: $VERSION"
+
           aws elasticbeanstalk create-application-version \
             --application-name hrm-paas \
             --version-label "$VERSION" \
-            --source-bundle S3Bucket=hrm-deployments,S3Key="${{ matrix.service }}-backend.zip" \
-            --auto-create-application false || true
+            --source-bundle S3Bucket=$DEPLOY_BUCKET,S3Key="${SERVICE_NAME}-backend.zip" \
+            --no-auto-create-application
+          
+          # 4. UPDATE ENVIRONMENT
           aws elasticbeanstalk update-environment \
             --application-name hrm-paas \
-            --environment-name hrm-${{ matrix.service }}-backend-env \
+            --environment-name hrm-${CLEAN_NAME}-backend-env \
             --version-label "$VERSION"
