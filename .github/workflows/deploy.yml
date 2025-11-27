@@ -104,6 +104,7 @@ jobs:
         with:
           name: build-${{ matrix.service }}-${{ matrix.type }}
           path: src/src/dist/apps/${{ matrix.service }}-${{ matrix.type }}
+          if-no-files-found: error
           retention-days: 1
 
   # ====================================================
