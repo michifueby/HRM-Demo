@@ -58,34 +58,33 @@ jobs:
         run: |
           cd src/src
 
-          # 1. ENVIRONMENT: Unshackled
-          # We REMOVED 'UV_THREADPOOL_SIZE=1' to allow the CPU to run fast again.
-          # We REMOVED 'max-old-space-size' to let Node manage its own memory (using Swap if needed).
+          # 1. ENVIRONMENT
           export CI=true
           export NX_DAEMON=false
-          export NX_TASKS_RUNNER_DYNAMIC_OUTPUT=false 
           export FORCE_COLOR=0
           export GENERATE_SOURCEMAP=false 
+          # Use 6GB RAM (relying on Swap for overflow)
+          export NODE_OPTIONS="--max-old-space-size=6144"
 
-          # 2. INSTALL (Aggressive Fix)
-          # We use 'npm install' instead of 'npm ci'.
-          # Why? Your package-lock.json has broken/old versions of @swc/core (v1.5).
-          # 'npm install' will update them to what Nx actually needs (v1.10+) automatically.
-          echo "Installing dependencies (Force Resolve)..."
-          npm install --legacy-peer-deps --no-audit --no-fund --ignore-scripts
+          # 2. INSTALL (Standard)
+          echo "Installing dependencies..."
+          npm ci --legacy-peer-deps --omit=optional --no-audit --no-fund --ignore-scripts
 
-          # 3. ENSURE BINARIES
-          # We explicitly add the linux binary just to be safe.
-          echo "Ensuring Linux Binaries..."
-          npm install @swc/core-linux-x64-gnu --no-save --no-optional --ignore-scripts
-          npm install @esbuild/linux-x64 --no-save --no-optional --ignore-scripts
-
-          # 4. BUILD (High Timeout)
-          # We set timeout to 60m. 
-          # We allow parallel=1 but we removed the CPU throttle, so it should be much faster.
+          # 3. CRITICAL FIX: FORCE UPGRADE & CLEAN
+          # We force install the latest @swc/core. This overwrites the old 1.5.29 version.
+          echo "Forcing SWC Upgrade..."
+          npm install --save-dev @swc/core@latest @swc/helpers@latest --ignore-scripts
           
-          echo "Build ${{ matrix.service }}-frontend (Timeout: 60m)..."
-          timeout 60m ./node_modules/.bin/nx build ${{ matrix.service }}-frontend \
+          # We MUST delete the cache, or Nx might try to use the old version's artifacts
+          echo "Clearing internal cache..."
+          rm -rf node_modules/.cache
+          rm -rf .nx
+
+          # 4. BUILD (25m Timeout)
+          # We removed --verbose because it often hides the real error or causes buffer hangs.
+          
+          echo "Build ${{ matrix.service }}-frontend..."
+          timeout 25m ./node_modules/.bin/nx build ${{ matrix.service }}-frontend \
             --configuration=production \
             --parallel=1 \
             --max-workers=1 \
@@ -93,8 +92,8 @@ jobs:
             --no-daemon \
             --sourceMap=false
 
-          echo "Build ${{ matrix.service }}-backend (Timeout: 60m)..."
-          timeout 60m ./node_modules/.bin/nx build ${{ matrix.service }}-backend \
+          echo "Build ${{ matrix.service }}-backend..."
+          timeout 25m ./node_modules/.bin/nx build ${{ matrix.service }}-backend \
             --configuration=production \
             --parallel=1 \
             --max-workers=1 \
