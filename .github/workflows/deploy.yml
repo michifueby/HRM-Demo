@@ -177,21 +177,23 @@ jobs:
         run: |
           # 1. PREPARE NAMES
           SERVICE_NAME="${{ matrix.service }}"
-          # Strip 'hr-' prefix for the Environment Name (hr-core -> core)
           CLEAN_NAME=${SERVICE_NAME#hr-} 
           
-          echo "Artifact Service: $SERVICE_NAME"
-          echo "Target AWS Resource: $CLEAN_NAME"
+          # CONFIGURATION: unique bucket 
+          DEPLOY_BUCKET="hrm-deployments-mf"
+          
+          echo "Service: $SERVICE_NAME -> $CLEAN_NAME"
+          echo "Bucket: $DEPLOY_BUCKET"
 
           # 2. ZIP ARTIFACT
           cd dist_backend
-          # Create zip in the parent directory
           zip -r ../${SERVICE_NAME}-backend.zip . > /dev/null
           cd ..
           
-          # 3. UPLOAD TO S3 
-          echo "Uploading ${SERVICE_NAME}-backend.zip to S3..."
-          aws s3 cp ${SERVICE_NAME}-backend.zip s3://hrm-deployments/${SERVICE_NAME}-backend.zip
+          # 3. UPLOAD TO S3
+          # We use the variable $DEPLOY_BUCKET now
+          echo "Uploading to S3..."
+          aws s3 cp ${SERVICE_NAME}-backend.zip s3://$DEPLOY_BUCKET/${SERVICE_NAME}-backend.zip
 
           # 4. CREATE APP VERSION
           VERSION="gha-${{ github.run_id }}-${{ github.run_attempt }}"
@@ -199,7 +201,7 @@ jobs:
           aws elasticbeanstalk create-application-version \
             --application-name hrm-paas \
             --version-label "$VERSION" \
-            --source-bundle S3Bucket=hrm-deployments,S3Key="${SERVICE_NAME}-backend.zip" \
+            --source-bundle S3Bucket=$DEPLOY_BUCKET,S3Key="${SERVICE_NAME}-backend.zip" \
             --no-auto-create-application
           
           # 5. UPDATE ENVIRONMENT
