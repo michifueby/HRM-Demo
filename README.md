@@ -13,6 +13,75 @@ Each is a full-stack mini-app:
 ## Deployment Architecture
 Based on the HRM context (load-balanced installation servers, modular components, integrations, peak usage patterns), I've designed a PaaS-optimized architecture using best practices like microservices, scalability, and zero-downtime deployments. This evaluates restructuring HRM for PaaS: shifting from monolithic on-prem to modular, cloud-native setup reduces ops costs, handles peaks (e.g., post-lunch spikes), and supports 10+ integrations via APIs.
 
+```mermaid
+flowchart TB
+    %% Users
+    subgraph "Users (Global)"
+        User[Internet Users]
+    end
+
+    %% CloudFront Layer
+    subgraph CDN["AWS CloudFront (Global CDN + HTTPS)"]
+        CF_Core[CloudFront\nhrm-core.example.com]
+        CF_Met[CloudFront\nhrm-metrics.example.com]
+        CF_Act[CloudFront\nhrm-activities.example.com]
+    end
+
+    %% Frontend Static Hosting
+    subgraph Frontend["Static Frontends (Angular)"]
+        direction TB
+        S3_Core[S3 Bucket\nhrm-core-frontend]
+        S3_Met[S3 Bucket\nhrm-metrics-frontend]
+        S3_Act[S3 Bucket\nhrm-activities-frontend]
+
+        App1[HR-Core App - Angular SPA - Dynamic /time fetch - Logo + Navigation links]
+        App2[HR-Metrics App - Angular SPA - Dynamic /time fetch - Logo + Navigation links]
+        App3[HR-Activities App - Angular SPA - Dynamic /time fetch - Logo + Navigation links]
+    end
+
+    %% Backend APIs
+    subgraph Backend["Backend APIs (Node.js + Express)"]
+        direction TB
+        EB_Core[Elastic Beanstalk - hr-core-backend-env]
+        EB_Met[Elastic Beanstalk - hr-metrics-backend-env]
+        EB_Act[Elastic Beanstalk - hr-activities-backend-env]
+
+        API_Core 
+        API_Met
+        API_Act
+    end
+
+    %% Connections
+    User -->|https://hrm-core.example.com| CF_Core
+    User -->|https://hrm-metrics.example.com| CF_Met
+    User -->|https://hrm-activities.example.com| CF_Act
+
+    CF_Core --> S3_Core
+    CF_Met --> S3_Metrics
+    CF_Act --> S3_Activities
+
+    S3_Core --> App1
+    S3_Met --> App2
+    S3_Act --> App3
+
+    App1 -->|fetch time| EB_Core
+    App2 -->|fetch time| EB_Met
+    App3 -->|fetch time| EB_Act
+
+    EB_Core --> API_Core
+    EB_Met --> API_Metrics
+    EB_Act --> API_Activities
+
+    %% Styling
+    classDef frontend fill:#e3f2fd,stroke:#1976d2,stroke-width:2px,color:#000
+    classDef backend fill:#e8f5e8,stroke:#388e3c,stroke-width:2px,color:#000
+    classDef cdn fill:#fff3e0,stroke:#f57c00,stroke-width:2px,color:#000
+
+    class App1,App2,App3 frontend
+    class API_Core,API_Met,API_Act backend
+    class CF_Core,CF_Met,CF_Act cdn
+```
+
 ### Key Patterns Applied:
 - Microservices: Each "module" (app) as a separate service for independent scaling (e.g., HR-Activities scales during peaks).
 - Containerization: Docker for portability.
