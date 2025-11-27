@@ -175,15 +175,33 @@ jobs:
           
       - name: Deploy Backend
         run: |
+          # 1. PREPARE NAMES
+          # We need to strip 'hr-' from the service name to match AWS resources
+          # Example: 'hr-core' becomes 'core'
+          SERVICE_NAME="${{ matrix.service }}"
+          CLEAN_NAME=${SERVICE_NAME#hr-} 
+          
+          echo "Artifact Service: $SERVICE_NAME"
+          echo "Target AWS Resource: $CLEAN_NAME"
+
+          # 2. PREPARE ZIP
           cd dist_backend
-          zip -r ../backend.zip . > /dev/null
+          zip -r ../${SERVICE_NAME}-backend.zip . > /dev/null
+          cd ..
+          
           VERSION="gha-${{ github.run_id }}-${{ github.run_attempt }}"
+          
+          # 3. CREATE APP VERSION
+          # Fix: Use --no-auto-create-application instead of 'false'
           aws elasticbeanstalk create-application-version \
             --application-name hrm-paas \
             --version-label "$VERSION" \
-            --source-bundle S3Bucket=hrm-deployments,S3Key="${{ matrix.service }}-backend.zip" \
-            --auto-create-application false || true
+            --source-bundle S3Bucket=hrm-deployments,S3Key="${SERVICE_NAME}-backend.zip" \
+            --no-auto-create-application
+          
+          # 4. UPDATE ENVIRONMENT
+          # Fix: Use CLEAN_NAME (core) instead of matrix name (hr-core)
           aws elasticbeanstalk update-environment \
             --application-name hrm-paas \
-            --environment-name hrm-${{ matrix.service }}-backend-env \
+            --environment-name hrm-${CLEAN_NAME}-backend-env \
             --version-label "$VERSION"
