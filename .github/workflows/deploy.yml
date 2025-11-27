@@ -138,53 +138,41 @@ jobs:
           path: dist_backend
 
       - name: Deploy Frontend
+        env:
+          # 1. SECRET MAPPING 
+          CLOUDFRONT_ID: ${{ 
+            matrix.service == 'hr-core' && secrets.CF_DISTRIBUTION_HR_CORE || 
+            matrix.service == 'hr-metrics' && secrets.CF_DISTRIBUTION_HR_METRICS || 
+            matrix.service == 'hr-activities' && secrets.CF_DISTRIBUTION_HR_ACTIVITIES 
+            }}
         run: |
-          # 1. FIX S3 PATH:
-          # We check if the 'browser' folder exists (Angular 17+)
-          # If it does, we deploy the *contents* of that folder to the S3 Root.
+          # 2. FIX S3 PATH (Prevent 'domain.com/browser/' issue)
+          # We define the source path. If the 'browser' subfolder exists (Angular), we use that.
           SOURCE_PATH="dist_frontend"
           if [ -d "dist_frontend/browser" ]; then
             SOURCE_PATH="dist_frontend/browser"
           fi
           
-          echo "Deploying from: $SOURCE_PATH"
-          
-          # We sync contents to the ROOT of the bucket (removing the /browser/ prefix)
+          echo "Deploying content from $SOURCE_PATH to root of S3..."
+
+          # We sync the CONTENTS of the browser folder to the ROOT of the bucket
           aws s3 sync $SOURCE_PATH s3://hrm-${{ matrix.service }}-frontend/ \
             --delete \
             --cache-control "public, max-age=60"
-          
-          # 2. FIX CLOUDFRONT ID:
-          # We determine the secret name based on the service
-          # If matrix is 'hr-core', we look for specific secrets, or fallback to the suffix.
-          
-          # Logic: Convert 'hr-core' -> 'CORE' to match your existing secrets?
-          # OR: Just assume you created the new secrets 'CF_DISTRIBUTION_HR_CORE'.
-          
-          # Let's try to find the secret dynamically. 
-          # GitHub Actions secrets are case-insensitive in the key name usually.
-          
-          DIST_ID="${{ secrets[format('CF_DISTRIBUTION_{0}', matrix.service)] }}"
-          
-          # If that failed (empty), try the version with underscore (HR_CORE)
-          if [ -z "$DIST_ID" ]; then
-             echo "Standard secret not found. Trying underscore format..."
-             # Bash string replacement: replace - with _
-             SERVICE_UPPER=$(echo "${{ matrix.service }}" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
-             # We can't access secrets dynamically in bash easily without mapping them all.
-             # EASIER FIX: logic in the YAML workflow step 'env' below.
-          fi
-          
-          aws cloudfront create-invalidation --distribution-id $DIST_ID --paths "/*"
-        env:
-          # MAPPING SECRETS MANUALLY TO ENSURE IT WORKS
-          # We inject the specific secret into the environment based on the matrix
-          DIST_ID: ${{ 
-            matrix.service == 'hr-core' && secrets.CF_DISTRIBUTION_HR_CORE || 
-            matrix.service == 'hr-metrics' && secrets.CF_DISTRIBUTION_HR_METRICS || 
-            matrix.service == 'hr-activities' && secrets.CF_DISTRIBUTION_HR_ACTIVITIES 
-            }}
 
+          # 3. DEBUG & INVALIDATE CLOUDFRONT
+          if [ -z "$CLOUDFRONT_ID" ]; then
+            echo "❌ ERROR: CloudFront Secret is empty!"
+            echo "Expected one of these secrets to exist:"
+            echo " - CF_DISTRIBUTION_HR_CORE"
+            echo " - CF_DISTRIBUTION_HR_METRICS"
+            echo " - CF_DISTRIBUTION_HR_ACTIVITIES"
+            exit 1
+          fi
+
+          echo "✅ Found Distribution ID: $CLOUDFRONT_ID"
+          aws cloudfront create-invalidation --distribution-id "$CLOUDFRONT_ID" --paths "/*"
+          
       - name: Deploy Backend
         run: |
           cd dist_backend
