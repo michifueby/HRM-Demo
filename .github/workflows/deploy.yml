@@ -63,31 +63,24 @@ jobs:
           export NX_DAEMON=false
           export FORCE_COLOR=0
           export GENERATE_SOURCEMAP=false 
-          # Use 6GB RAM (relying on Swap for overflow)
+          # Keep high memory limit (Swap handles the rest)
           export NODE_OPTIONS="--max-old-space-size=6144"
 
-          # 2. INSTALL (Standard)
-          echo "Installing dependencies..."
+          # 2. INSTALL
           npm ci --legacy-peer-deps --omit=optional --no-audit --no-fund --ignore-scripts
 
-          # 3. CRITICAL FIX: FORCE UPGRADE & CLEAN
-          # We force install the latest @swc/core. This overwrites the old 1.5.29 version.
+          # 3. FORCE UPGRADE (Vital to prevent the hang)
           echo "Forcing SWC Upgrade..."
           npm install --save-dev @swc/core@latest @swc/helpers@latest --ignore-scripts
-          
-          # We MUST delete the cache, or Nx might try to use the old version's artifacts
-          echo "Clearing internal cache..."
-          rm -rf node_modules/.cache
-          rm -rf .nx
+          rm -rf node_modules/.cache .nx
 
-          # 4. BUILD (25m Timeout)
-          # We removed --verbose because it often hides the real error or causes buffer hangs.
+          # 4. BUILD
+          # We REMOVED '--max-workers=1' to fix the schema error.
           
           echo "Build ${{ matrix.service }}-frontend..."
           timeout 25m ./node_modules/.bin/nx build ${{ matrix.service }}-frontend \
             --configuration=production \
             --parallel=1 \
-            --max-workers=1 \
             --skip-nx-cache \
             --no-daemon \
             --sourceMap=false
@@ -96,7 +89,6 @@ jobs:
           timeout 25m ./node_modules/.bin/nx build ${{ matrix.service }}-backend \
             --configuration=production \
             --parallel=1 \
-            --max-workers=1 \
             --skip-nx-cache \
             --no-daemon \
             --sourceMap=false
