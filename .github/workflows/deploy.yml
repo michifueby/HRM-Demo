@@ -116,7 +116,7 @@ jobs:
     timeout-minutes: 15
     strategy:
       matrix:
-        service: [ core, metrics, activities ]
+        service: [ hr-core, hr-metrics, hr-activities ]
     
     steps:
       - name: Configure AWS credentials
