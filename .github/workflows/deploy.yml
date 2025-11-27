@@ -146,7 +146,7 @@ jobs:
             matrix.service == 'hr-activities' && secrets.CF_DISTRIBUTION_HR_ACTIVITIES 
             }}
         run: |
-          # 2. FIX S3 PATH (Prevent 'domain.com/browser/' issue)
+          # 2. FIX S3 PATH 
           # We define the source path. If the 'browser' subfolder exists (Angular), we use that.
           SOURCE_PATH="dist_frontend"
           if [ -d "dist_frontend/browser" ]; then
@@ -176,31 +176,33 @@ jobs:
       - name: Deploy Backend
         run: |
           # 1. PREPARE NAMES
-          # We need to strip 'hr-' from the service name to match AWS resources
-          # Example: 'hr-core' becomes 'core'
           SERVICE_NAME="${{ matrix.service }}"
+          # Strip 'hr-' prefix for the Environment Name (hr-core -> core)
           CLEAN_NAME=${SERVICE_NAME#hr-} 
           
           echo "Artifact Service: $SERVICE_NAME"
           echo "Target AWS Resource: $CLEAN_NAME"
 
-          # 2. PREPARE ZIP
+          # 2. ZIP ARTIFACT
           cd dist_backend
+          # Create zip in the parent directory
           zip -r ../${SERVICE_NAME}-backend.zip . > /dev/null
           cd ..
           
+          # 3. UPLOAD TO S3 
+          echo "Uploading ${SERVICE_NAME}-backend.zip to S3..."
+          aws s3 cp ${SERVICE_NAME}-backend.zip s3://hrm-deployments/${SERVICE_NAME}-backend.zip
+
+          # 4. CREATE APP VERSION
           VERSION="gha-${{ github.run_id }}-${{ github.run_attempt }}"
           
-          # 3. CREATE APP VERSION
-          # Fix: Use --no-auto-create-application instead of 'false'
           aws elasticbeanstalk create-application-version \
             --application-name hrm-paas \
             --version-label "$VERSION" \
             --source-bundle S3Bucket=hrm-deployments,S3Key="${SERVICE_NAME}-backend.zip" \
             --no-auto-create-application
           
-          # 4. UPDATE ENVIRONMENT
-          # Fix: Use CLEAN_NAME (core) instead of matrix name (hr-core)
+          # 5. UPDATE ENVIRONMENT
           aws elasticbeanstalk update-environment \
             --application-name hrm-paas \
             --environment-name hrm-${CLEAN_NAME}-backend-env \
