@@ -16,10 +16,13 @@ export interface ServerTimeResponse {
   version?: string;
 }
 
+/**
+ * Injection token for API URL
+ */
 export const API_URL = new InjectionToken<string>('API_URL');
 
 @Injectable({
-  providedIn: 'root'
+  providedIn: 'root',
 })
 /**
  * TimeService to fetch server time from backend API
@@ -31,17 +34,10 @@ export class TimeService {
   private readonly http = inject(HttpClient);
 
   /**
-   * Determine API base URL depending on environment
+   * Initializes a new instance of the TimeService class.
+   * @param apiUrl The base URL of the API.
    */
-  private get apiBaseUrl(): string {
-    // Angular Universal safe check
-    if (typeof window === 'undefined') return '';
-
-    // If served by backend (same origin), use relative path
-    return '';
-  }
-
- constructor(
+  constructor(
     // eslint-disable-next-line @angular-eslint/prefer-inject
     @Inject(API_URL) private apiUrl: string
   ) {}
@@ -49,24 +45,18 @@ export class TimeService {
   /**
    * Cached server time Observable (auto-refreshes every 30s)
    */
-  private readonly time$ = timer(0, 30_000).pipe( // refresh every 30s
-    switchMap(() => this.http.get<ServerTimeResponse>(`${this.apiBaseUrl}/api/time`)),
-    shareReplay(1) // cache latest value for 1 frame
+  private readonly time$ = timer(0, 30_000).pipe(
+    switchMap(() =>
+      this.http.get<ServerTimeResponse>(`${this.apiUrl}/api/time`)
+    ),
+    shareReplay(1)
   );
 
   /**
-   * Get fresh server time (Observable – auto-updates)
-   * @returns Observable with the current server time
+   * Get the server time Observable (auto-refreshes every 30s)
+   * @returns The server time Observable
    */
   getServerTime$(): Observable<ServerTimeResponse> {
     return this.time$;
-  }
-
-  /**
-   * Fetch the current server time once (no auto-refresh)
-   * @returns Observable with the current server time
-   */
-  fetchServerTimeOnce(): Observable<ServerTimeResponse> {
-    return this.http.get<ServerTimeResponse>(`${this.apiBaseUrl}/api/time`);
   }
 }

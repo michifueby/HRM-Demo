@@ -36,7 +36,7 @@ export class AppComponent implements OnInit {
    */
   public links = {
     activities: environment.production ? environment.activitiesUrl : 'http://localhost:3002',
-    core: environment.production ? environment.apiUrl : 'http://localhost:3000'
+    core: environment.production ? environment.coreUrl : 'http://localhost:3001'
   };
 
   /**
