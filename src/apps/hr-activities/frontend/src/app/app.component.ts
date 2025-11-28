@@ -1,6 +1,6 @@
 import { Component, inject, OnInit } from '@angular/core';
 import { TimeService } from '@hrm/shared/time-service';
-import { environment } from '../environments/enviroment';
+import { environment } from '../environments/environment';
 
 @Component({
   selector: 'app-root',

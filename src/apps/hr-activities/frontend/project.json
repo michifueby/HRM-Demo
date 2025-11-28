@@ -45,8 +45,8 @@
           "outputHashing": "all",
           "fileReplacements": [
             {
-              "replace": "apps/hr-activities/frontend/src/environments/environment.ts",
-              "with": "apps/hr-activities/frontend/src/environments/environment.prod.ts"
+              "replace": "src/apps/hr-activities/frontend/src/environments/environment.ts",
+              "with": "src/apps/hr-activities/frontend/src/environments/environment.prod.ts"
             }
           ]
         },
